@@ -39,7 +39,7 @@ func (m Matrix) Dims() (int, int) {
 	return len(m), len(m[0])
 }
 
-// Checks if two matrices are equal
+// Checks if two matrices are equal.
 func (m Matrix) Equals(n Matrix) bool {
 	r1, c1 := m.Dims()
 	r2, c2 := n.Dims()
@@ -127,7 +127,7 @@ func (m Matrix) Tensor(n Matrix) Matrix {
 	for i1 := 0; i1 < r1; i1++ {
 		for i2 := 0; i2 < r2; i2++ {
 			i := i1*r2 + i2
-			m[i] = make([]complex128, c1*c2)
+			res[i] = make([]complex128, c1*c2)
 
 			for j1 := 0; j1 < c1; j1++ {
 				for j2 := 0; j2 < c2; j2++ {
@@ -143,14 +143,14 @@ func (m Matrix) Tensor(n Matrix) Matrix {
 
 // Alternative version of m.Tensor(n)
 // Note that for convinience, this function has variable arguments.
-func Tensor(m ...Matrix) Matrix {
-	if len(m) == 1 {
-		return m[0]
+func Tensor(ms ...Matrix) Matrix {
+	if len(ms) == 1 {
+		return ms[0]
 	}
 
-	res := m[0]
-	for i := 1; i < len(m); i++ {
-		res = res.Tensor(m[i])
+	res := ms[0]
+	for i := 1; i < len(ms); i++ {
+		res = res.Tensor(ms[i])
 	}
 
 	return res
