@@ -47,6 +47,9 @@ func (circ *Circuit) Apply(operator matrix.Matrix, qbits ...int) {
 	res := make(vector.Vector, circ.State.Dim())
 
 	for n, a := range circ.State {
+		if a == 0 {
+			continue
+		}
 		// a * |n>
 		// First, extract input qbits from n
 		// For example, if n = |0101> and qbit = 0, 2, x = |11>
@@ -64,10 +67,7 @@ func (circ *Circuit) Apply(operator matrix.Matrix, qbits ...int) {
 			nn := 0
 			for i, v := range qbits {
 				qi := (qx >> i) % 2
-				nn = n | (1 << v)
-				if qi == 0 {
-					nn = nn - (1 << v)
-				}
+				nn = n | (1 << v) - (qi^1)*(1<<v)
 			}
 			res[nn] += a * qa
 		}
@@ -96,18 +96,69 @@ func (circ *Circuit) H(n int) {
 	circ.Apply(gate.H(), n)
 }
 
-func (circ *Circuit) ControlOperator(operator matrix.Matrix, c int, x int) {
+func (circ *Circuit) ControlOperator(operator matrix.Matrix, cs []int, xs []int) {
 	if !operator.IsUnitary() {
 		panic("Operator not unitary.")
 	}
 
-	if len(operator) != 2 {
-		panic("Currently only one-qbit operator allowed.")
+	if len(operator) != len(xs) {
+		panic("Operator size does not match.")
 	}
 
+	if len(cs) == 1 && len(xs) == 1 {
+		circ.ControlSingle(operator, cs[0], xs[0])
+		return
+	}
+
+	// This is almost same to Apply(), except it checks the control qbit.
+
+	res := make(vector.Vector, len(circ.State))
+
+	for n, a := range circ.State {
+		if a == 0 {
+			continue
+		}
+
+		ctrl := 0
+
+		for _, c := range cs {
+			ctrl ^= ((n >> c) % 2)
+		}
+
+		if ctrl == 0 {
+			res[n] += a
+			continue
+		}
+
+		x := 0
+		for i, v := range xs {
+			x += ((n >> v) % 2) * (1 << i)
+		}
+		q := qbit.NewFromCbit(x, len(xs))
+		q = q.Apply(operator)
+
+		for qx, qa := range q {
+			nn := 0
+			for i, v := range xs {
+				qi := (qx >> i) % 2
+				nn = n | (1 << v) - (qi^1)*(1<<v)
+			}
+			res[nn] += a * qa
+		}
+	}
+
+	circ.State = res
+}
+
+// A more efficient implementation, when control/output qbit is single.
+func (circ *Circuit) ControlSingle(operator matrix.Matrix, c int, x int) {
 	res := make(vector.Vector, circ.State.Dim())
 
 	for n, a := range circ.State {
+		if a == 0 {
+			continue
+		}
+
 		cc := (n >> c) % 2
 
 		if cc == 0 {
@@ -124,11 +175,85 @@ func (circ *Circuit) ControlOperator(operator matrix.Matrix, c int, x int) {
 	}
 
 	circ.State = res
-
 }
 
 func (circ *Circuit) CX(c int, x int) {
-	circ.ControlOperator(gate.X(), c, x)
+	circ.ControlSingle(gate.X(), c, x)
+}
+
+func (circ *Circuit) Swap(x int, y int) {
+	res := make(vector.Vector, len(circ.State))
+
+	for n, a := range circ.State {
+		bx := (n >> x) % 2
+		by := (n >> y) % 2
+
+		nn := n
+
+		nn = (nn | (1 << x)) - (by^1)*(1<<x)
+		nn = (nn | (1 << y)) - (bx^1)*(1<<y)
+
+		res[nn] = a
+	}
+
+	circ.State = res
+}
+
+// QFT from [start, end)
+func (circ *Circuit) QFT(start, end int) {
+	if start < 0 || end > circ.N {
+		panic("Index out of range.")
+	}
+
+	if start >= end {
+		panic("Invalid start / end parameters.")
+	}
+
+	for i := end - 1; i >= start; i-- {
+		circ.H(i)
+
+		for j := start; j < i; j++ {
+			circ.ControlSingle(gate.P(math.Pi/float64(numbers.Pow(2, i-j))), j, i)
+		}
+	}
+
+	swapstart := start
+	swapend := (start + end) / 2
+	if (end-start)%2 != 0 {
+		swapend += 1
+	}
+
+	for i := swapstart; i < swapend; i++ {
+		circ.Swap(i, end+start-i-1)
+	}
+
+}
+
+func (circ *Circuit) InvQFT(start, end int) {
+	if start < 0 || end > circ.N {
+		panic("Index out of range.")
+	}
+
+	if start >= end {
+		panic("Invalid start / end parameters.")
+	}
+
+	swapstart := start
+	swapend := (start + end) / 2
+	if (end-start)%2 != 0 {
+		swapend += 1
+	}
+
+	for i := swapstart; i < swapend; i++ {
+		circ.Swap(i, end+start-i-1)
+	}
+
+	for i := start; i < end; i++ {
+		for j := start; j < i; j++ {
+			circ.ControlSingle(gate.P(-math.Pi/float64(numbers.Pow(2, i-j))), j, i)
+		}
+		circ.H(i)
+	}
 }
 
 func (circ *Circuit) Measure(x int) int {

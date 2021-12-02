@@ -1,4 +1,4 @@
-package algorithms
+package deutchjozsa
 
 import (
 	"github.com/sp301415/qsim"
