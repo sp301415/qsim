@@ -32,3 +32,16 @@ func TestTensor(t *testing.T) {
 		t.Fail()
 	}
 }
+
+func TestIsUnitary(t *testing.T) {
+	m := matrix.New(
+		[][]complex128{
+			{0.5 + 0.5i, 0.5 - 0.5i},
+			{0.5 - 0.5i, 0.5 + 0.5i},
+		},
+	)
+
+	if !m.IsUnitary() {
+		t.Fail()
+	}
+}

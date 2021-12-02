@@ -2,6 +2,7 @@
 package vector
 
 import (
+	"math"
 	"math/cmplx"
 
 	"github.com/sp301415/qsim/math/matrix"
@@ -40,7 +41,7 @@ func (v Vector) Equals(w Vector) bool {
 	}
 
 	for i := range v {
-		if v[i] != w[i] {
+		if cmplx.Abs(v[i]-w[i]) > 1e-6 {
 			return false
 		}
 	}
@@ -88,7 +89,7 @@ func (v Vector) InnerProduct(w Vector) complex128 {
 	res := 0 + 0i
 
 	for i := range v {
-		res += v[i] + w[i]
+		res += cmplx.Conj(v[i]) * w[i]
 	}
 
 	return res
@@ -172,6 +173,22 @@ func (v Vector) Apply(m matrix.Matrix) Vector {
 		for j := 0; j < c; j++ {
 			res[i] += m[i][j] * v[j]
 		}
+	}
+
+	return res
+}
+
+func (v Vector) Normalize() Vector {
+	norm := 0.0
+	for _, n := range v {
+		norm += math.Pow(cmplx.Abs(n), 2)
+	}
+	norm = math.Sqrt(norm)
+
+	res := make(Vector, v.Dim())
+
+	for i := range res {
+		res[i] = v[i] / complex(norm, 0)
 	}
 
 	return res

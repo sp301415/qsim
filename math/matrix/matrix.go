@@ -1,6 +1,10 @@
 // Package matrix provides various functions for matrix operations.
 package matrix
 
+import (
+	"math/cmplx"
+)
+
 type Matrix [][]complex128
 
 // Generates new matrix.
@@ -34,6 +38,17 @@ func Zeros(n int) Matrix {
 	return ret
 }
 
+// Generates Identity matrix.
+func Identity(n int) Matrix {
+	m := Zeros(n)
+
+	for i := 0; i < len(m); i++ {
+		m[i][i] = 1
+	}
+
+	return m
+}
+
 // Returns the dimension(row, column) of matrix.
 func (m Matrix) Dims() (int, int) {
 	return len(m), len(m[0])
@@ -50,7 +65,7 @@ func (m Matrix) Equals(n Matrix) bool {
 
 	for i := 0; i < r1; i++ {
 		for j := 0; j < c1; j++ {
-			if m[i][j] != n[i][j] {
+			if cmplx.Abs(m[i][j]-n[i][j]) > 1e-6 {
 				return false
 			}
 		}
@@ -117,6 +132,22 @@ func Mul(m, n Matrix) Matrix {
 	return m.Mul(n)
 }
 
+// Multiplies a float constant to a matrix.
+func (m Matrix) CMul(k complex128) Matrix {
+	r, c := m.Dims()
+	res := make(Matrix, r)
+
+	for i := 0; i < r; i++ {
+		res[i] = make([]complex128, c)
+
+		for j := 0; j < c; j++ {
+			res[i][j] *= k
+		}
+	}
+
+	return res
+}
+
 // Tensor product of two matrices.
 func (m Matrix) Tensor(n Matrix) Matrix {
 	r1, c1 := m.Dims()
@@ -154,4 +185,37 @@ func Tensor(ms ...Matrix) Matrix {
 	}
 
 	return res
+}
+
+// Dagger = transpose conjugate
+func (m Matrix) Dagger() Matrix {
+	r, c := m.Dims()
+	n := make(Matrix, r)
+
+	for i := 0; i < r; i++ {
+		n[i] = make([]complex128, c)
+
+		for j := 0; j < c; j++ {
+			n[i][j] = cmplx.Conj(m[j][i])
+		}
+	}
+
+	return n
+}
+
+func (m Matrix) IsSquare() bool {
+	r, c := m.Dims()
+
+	return r == c
+}
+
+func (m Matrix) IsUnitary() bool {
+	if !m.IsSquare() {
+		return false
+	}
+
+	n, _ := m.Dims()
+	id := Identity(n)
+
+	return Mul(m, m.Dagger()).Equals(id)
 }
