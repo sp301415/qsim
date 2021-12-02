@@ -27,7 +27,7 @@ func BalancedOracle(regs vector.Vector, n int) vector.Vector {
 		panic("Invalid size of registers.")
 	}
 
-	res := make(vector.Vector, regs.Dim())
+	res := vector.Zeros(regs.Dim())
 
 	for x, a := range regs {
 		res[x^BalancedFunc(x>>1)] += a
@@ -42,7 +42,7 @@ func ConstantOracle(regs vector.Vector, n int) vector.Vector {
 		panic("Invalid size of registers.")
 	}
 
-	res := make(vector.Vector, regs.Dim())
+	res := vector.Zeros(regs.Dim())
 
 	for x, a := range regs {
 		res[x^ConstantFunc(x>>1)] += a

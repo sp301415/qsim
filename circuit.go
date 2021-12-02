@@ -44,7 +44,7 @@ func (circ *Circuit) Apply(operator matrix.Matrix, qbits ...int) {
 	// Tensor Product takes too long, we need another method.
 	// Idea: decompose state vector to pure states?
 
-	res := make(vector.Vector, circ.State.Dim())
+	res := vector.Zeros(circ.State.Dim())
 
 	for n, a := range circ.State {
 		if a == 0 {
@@ -112,7 +112,7 @@ func (circ *Circuit) ControlOperator(operator matrix.Matrix, cs []int, xs []int)
 
 	// This is almost same to Apply(), except it checks the control qbit.
 
-	res := make(vector.Vector, len(circ.State))
+	res := vector.Zeros(len(circ.State))
 
 	for n, a := range circ.State {
 		if a == 0 {
@@ -152,7 +152,7 @@ func (circ *Circuit) ControlOperator(operator matrix.Matrix, cs []int, xs []int)
 
 // A more efficient implementation, when control/output qbit is single.
 func (circ *Circuit) ControlSingle(operator matrix.Matrix, c int, x int) {
-	res := make(vector.Vector, circ.State.Dim())
+	res := vector.Zeros(circ.State.Dim())
 
 	for n, a := range circ.State {
 		if a == 0 {
@@ -182,7 +182,7 @@ func (circ *Circuit) CX(c int, x int) {
 }
 
 func (circ *Circuit) Swap(x int, y int) {
-	res := make(vector.Vector, len(circ.State))
+	res := vector.Zeros(len(circ.State))
 
 	for n, a := range circ.State {
 		bx := (n >> x) % 2
@@ -217,14 +217,8 @@ func (circ *Circuit) QFT(start, end int) {
 		}
 	}
 
-	swapstart := start
-	swapend := (start + end) / 2
-	if (end-start)%2 != 0 {
-		swapend += 1
-	}
-
-	for i := swapstart; i < swapend; i++ {
-		circ.Swap(i, end+start-i-1)
+	for i, j := start, end-1; i < j; i, j = i+1, j-1 {
+		circ.Swap(i, j)
 	}
 
 }
@@ -238,14 +232,8 @@ func (circ *Circuit) InvQFT(start, end int) {
 		panic("Invalid start / end parameters.")
 	}
 
-	swapstart := start
-	swapend := (start + end) / 2
-	if (end-start)%2 != 0 {
-		swapend += 1
-	}
-
-	for i := swapstart; i < swapend; i++ {
-		circ.Swap(i, end+start-i-1)
+	for i, j := start, end-1; i < j; i, j = i+1, j-1 {
+		circ.Swap(i, j)
 	}
 
 	for i := start; i < end; i++ {

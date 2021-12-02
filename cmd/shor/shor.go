@@ -18,5 +18,5 @@ func main() {
 
 	n := *lenPtr
 
-	fmt.Printf("[+] Found factor of %d: %d.\n", n, shor.Shor(n))
+	fmt.Printf("[+] Found factor of %d: %d\n", n, shor.Shor(n))
 }

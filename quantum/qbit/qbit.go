@@ -14,7 +14,7 @@ func Zero() vector.Vector {
 
 // Returns |00...0>
 func Zeros(n int) vector.Vector {
-	data := make(vector.Vector, numbers.Pow(2, n))
+	data := vector.Zeros(numbers.Pow(2, n))
 	data[0] = 1
 
 	return vector.New(data)
@@ -27,7 +27,7 @@ func One() vector.Vector {
 
 // Returns |11...1>
 func Ones(n int) vector.Vector {
-	data := make(vector.Vector, numbers.Pow(2, n))
+	data := vector.Zeros(numbers.Pow(2, n))
 	data[len(data)-1] = 1
 
 	return vector.New(data)
@@ -41,7 +41,7 @@ func NewFromCbit(n int, l int) vector.Vector {
 		l = numbers.Pow(2, numbers.BitLength(n))
 	}
 
-	q := make(vector.Vector, numbers.Pow(2, l))
+	q := vector.Zeros(numbers.Pow(2, l))
 	q[n] = 1
 
 	return vector.New(q)

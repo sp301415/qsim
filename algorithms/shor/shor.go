@@ -13,7 +13,9 @@ import (
 
 func Shor(N int) int {
 	fmt.Printf("[+] Factoring: %d\n", N)
+
 start:
+
 	// Classical part.
 	a := 0
 	for {
@@ -64,6 +66,8 @@ start:
 
 	q.InvQFT(n, 3*n)
 
+	fmt.Println("[*] Measuring...")
+
 	y := 0
 	for i := n; i < 3*n; i++ {
 		y += q.Measure(i) * (1 << (i - n))
@@ -73,34 +77,32 @@ start:
 
 	Q := 1 << (2 * n)
 	yQ := fraction.New(y, Q)
+
 	r := 0
+	found_r := false
 
-	for i := range yQ.ContinuedFraction() {
-
+	for i := 1; i <= len(yQ.ContinuedFraction()); i++ {
 		ds := yQ.FractionalApprox(i)
-
 		r = ds.D
 
 		fmt.Printf("[*] Trying with r: %d...\n", r)
 
-		if r > Q {
-			fmt.Println("[!] Failed to find factor on this try :(")
-			goto start
+		if r > N {
+			break
 		}
 
 		if numbers.PowMod(a, r, N) == 1 {
+			found_r = true
 			break
 		}
 	}
 
-	// DO IT AGAIN!!!
-	if r%2 != 0 {
-		fmt.Println("[!] Failed to find factor on this try :(")
+	if !found_r {
+		fmt.Println("[!] Failed to find r on this try :(")
 		goto start
 	}
 
-	// DO IT AGAIN!!!
-	if numbers.PowMod(a, r/2, N) == N-1 {
+	if r%2 != 0 || numbers.PowMod(a, r/2, N) == N-1 {
 		fmt.Println("[!] Failed to find factor on this try :(")
 		goto start
 	}
