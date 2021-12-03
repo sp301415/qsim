@@ -70,11 +70,11 @@ func DeutchJozsa(n int, oracle func(vector.Vector, int) vector.Vector) bool {
 		q.H(i)
 	}
 
-	res := 0
-	for i := 1; i < n+1; i++ {
-		m := q.Measure(i)
-		res += m * (1 << (i - 1))
+	mslice := make([]int, n)
+	for i := range mslice {
+		mslice[i] = i
 	}
+	res := q.Measure(mslice...)
 
 	return res == 0
 }

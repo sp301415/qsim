@@ -68,7 +68,7 @@ func (circ *Circuit) Apply(operator matrix.Matrix, qbits ...int) {
 			nn := 0
 			for i, v := range qbits {
 				qi := (qx >> i) % 2
-				nn = n | (1 << v) - (qi^1)*(1<<v)
+				nn = (n | (1 << v)) - ((qi ^ 1) << v)
 			}
 			res[nn] += a * qa
 		}
@@ -121,7 +121,6 @@ func (circ *Circuit) ControlOperator(operator matrix.Matrix, cs []int, xs []int)
 		}
 
 		ctrl := 0
-
 		for _, c := range cs {
 			ctrl ^= ((n >> c) % 2)
 		}
@@ -142,7 +141,7 @@ func (circ *Circuit) ControlOperator(operator matrix.Matrix, cs []int, xs []int)
 			nn := 0
 			for i, v := range xs {
 				qi := (qx >> i) % 2
-				nn = n | (1 << v) - (qi^1)*(1<<v)
+				nn = (n | (1 << v)) - ((qi ^ 1) << v)
 			}
 			res[nn] += a * qa
 		}
@@ -161,7 +160,6 @@ func (circ *Circuit) ControlSingle(operator matrix.Matrix, c int, x int) {
 		}
 
 		cc := (n >> c) % 2
-
 		if cc == 0 {
 			res[n] += a
 			continue
@@ -191,8 +189,8 @@ func (circ *Circuit) Swap(x int, y int) {
 
 		nn := n
 
-		nn = (nn | (1 << x)) - (by^1)*(1<<x)
-		nn = (nn | (1 << y)) - (bx^1)*(1<<y)
+		nn = (nn | (1 << x)) - ((by ^ 1) << x)
+		nn = (nn | (1 << y)) - ((bx ^ 1) << y)
 
 		res[nn] = a
 	}
@@ -255,6 +253,9 @@ func (circ *Circuit) Measure(qbits ...int) int {
 	prob := make([]float64, 1<<len(qbits))
 
 	for n, a := range circ.State {
+		if a == 0 {
+			continue
+		}
 		o := 0
 		for i, q := range qbits {
 			o += ((n >> q) % 2) << i
