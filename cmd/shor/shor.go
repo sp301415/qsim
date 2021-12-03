@@ -9,6 +9,7 @@ import (
 
 func main() {
 	lenPtr := flag.Int("n", 0, "Number to factorize.")
+	verbPtr := flag.Bool("verbose", false, "Prints messages when on.")
 
 	flag.Parse()
 
@@ -17,6 +18,11 @@ func main() {
 	}
 
 	n := *lenPtr
+	verb := *verbPtr
 
-	fmt.Printf("[+] Found factor of %d: %d\n", n, shor.Shor(n))
+	if verb {
+		fmt.Printf("[+] Found factor of %d: %d\n", n, shor.ShorVerbose(n))
+	} else {
+		fmt.Printf("[+] Found factor of %d: %d\n", n, shor.Shor(n))
+	}
 }

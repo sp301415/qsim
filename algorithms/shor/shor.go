@@ -11,30 +11,34 @@ import (
 	"github.com/sp301415/qsim/quantum/qbit"
 )
 
-func Shor(N int) int {
-	fmt.Printf("[+] Factoring: %d\n", N)
-
-start:
-
-	// Classical part.
+func shorInstance(N int, verbose bool) int {
+	// Classical Part.
 	a := 0
 	for {
 		a = rand.Intn(N) + 1
 		K := numbers.GCD(a, N)
 
 		if K != 1 {
-			fmt.Println("[-] Found factor by luck. We start again.")
-			goto start
+			if verbose {
+				fmt.Println("[-] Found factor by luck. We start again.")
+			}
+			return 0
+		} else {
+			break
 		}
-		break
 	}
 
-	fmt.Printf("[+] Using a: %d\n", a)
+	if verbose {
+		fmt.Printf("[+] Using a: %d\n", a)
+	}
 
 	n := numbers.BitLength(N)
 
-	fmt.Println("[*] Initializing Qbit State...")
+	if verbose {
+		fmt.Println("[*] Initializing Qbit State...")
+	}
 
+	// Quantum Part.
 	q := qsim.NewCircuit(3 * n)
 	q.InitQbit(qbit.NewFromCbit((1<<n)-1, 3*n))
 
@@ -44,39 +48,42 @@ start:
 
 	newState := vector.Zeros(q.State.Dim())
 
-	fmt.Println("[*] Applying Shor's Oracle...")
+	if verbose {
+		fmt.Println("[*] Applying Shor's Oracle...")
+	}
 
 	for qn, qa := range q.State {
 		if qa == 0 {
 			continue
 		}
-		// Take the upmost 2n bit...
 		x := qn >> n
-		// pow it...
 		r := numbers.PowMod(a, x, N)
-		// xor with output register...
 		o := (qn % (1 << n)) ^ r
-		// then add it with x!
 		newState[(x<<n)+o] += qa
 	}
-
 	q.State = newState
 
-	fmt.Println("[*] Applying Inverse QFT...")
+	if verbose {
+		fmt.Println("[*] Applying Inverse QFT...")
+	}
 
 	q.InvQFT(n, 3*n)
 
-	fmt.Println("[*] Measuring...")
+	if verbose {
+		fmt.Println("[*] Measuring...")
+	}
 
 	mslice := make([]int, 2*n)
 	for i := range mslice {
 		mslice[i] = i + n
 	}
-
 	y := q.Measure(mslice...)
 
-	fmt.Printf("[+] Found y: %d\n", y)
+	if verbose {
+		fmt.Printf("[+] Found y: %d\n", y)
+	}
 
+	// Again, Classical Part.
 	Q := 1 << (2 * n)
 	yQ := fraction.New(y, Q)
 
@@ -91,7 +98,9 @@ start:
 			continue
 		}
 
-		fmt.Printf("[*] Trying with r: %d...\n", r)
+		if verbose {
+			fmt.Printf("[*] Trying with r: %d...\n", r)
+		}
 
 		if r > N {
 			break
@@ -104,16 +113,46 @@ start:
 	}
 
 	if !found_r {
-		fmt.Println("[!] Failed to find r on this try :(")
-		goto start
+		if verbose {
+			fmt.Println("[!] Failed to find r on this try :(")
+		}
+		return 0
 	}
 
 	if r%2 != 0 || numbers.PowMod(a, r/2, N) == N-1 {
-		fmt.Println("[!] Failed to find factor on this try :(")
-		goto start
+		if verbose {
+			fmt.Println("[!] Failed to find factor on this try :(")
+		}
+		return 0
 	}
 
-	fmt.Printf("[+] Found r: %d\n", r)
+	if verbose {
+		fmt.Printf("[+] Found r: %d\n", r)
+	}
 
 	return numbers.GCD(N, numbers.PowMod(a, r/2, N)-1)
+}
+
+func Shor(N int) int {
+	factor := 0
+	for {
+		factor = shorInstance(N, false)
+		if factor != 0 {
+			break
+		}
+	}
+
+	return factor
+}
+
+func ShorVerbose(N int) int {
+	factor := 0
+	for {
+		factor = shorInstance(N, true)
+		if factor != 0 {
+			break
+		}
+	}
+
+	return factor
 }
