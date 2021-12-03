@@ -84,3 +84,16 @@ func TestMeasure(t *testing.T) {
 		t.Fail()
 	}
 }
+
+func TestMultiMeasure(t *testing.T) {
+	N := 3
+	I := 5
+	c := qsim.NewCircuit(N)
+	c.InitQbit(qbit.NewFromCbit(I, N))
+
+	x := c.Measure(0, 2)
+
+	if x != 3 {
+		t.Fail()
+	}
+}

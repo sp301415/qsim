@@ -68,10 +68,12 @@ start:
 
 	fmt.Println("[*] Measuring...")
 
-	y := 0
-	for i := n; i < 3*n; i++ {
-		y += q.Measure(i) * (1 << (i - n))
+	mslice := make([]int, 2*n)
+	for i := range mslice {
+		mslice[i] = i + n
 	}
+
+	y := q.Measure(mslice...)
 
 	fmt.Printf("[+] Found y: %d\n", y)
 
@@ -84,6 +86,10 @@ start:
 	for i := 1; i <= len(yQ.ContinuedFraction()); i++ {
 		ds := yQ.FractionalApprox(i)
 		r = ds.D
+
+		if r == 1 {
+			continue
+		}
 
 		fmt.Printf("[*] Trying with r: %d...\n", r)
 

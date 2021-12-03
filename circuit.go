@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/cmplx"
 	"math/rand"
+	"sort"
 	"strings"
 	"time"
 
@@ -56,7 +57,7 @@ func (circ *Circuit) Apply(operator matrix.Matrix, qbits ...int) {
 		x := 0
 		for i, v := range qbits {
 			// Extract vth bit from n, plug it in to ith bit of x.
-			x += ((n >> v) % 2) * (1 << i)
+			x += ((n >> v) % 2) << i
 		}
 		// Generate new qbit from x, apply operator to it.
 		q := qbit.NewFromCbit(x, len(qbits))
@@ -132,7 +133,7 @@ func (circ *Circuit) ControlOperator(operator matrix.Matrix, cs []int, xs []int)
 
 		x := 0
 		for i, v := range xs {
-			x += ((n >> v) % 2) * (1 << i)
+			x += ((n >> v) % 2) << i
 		}
 		q := qbit.NewFromCbit(x, len(xs))
 		q = q.Apply(operator)
@@ -244,33 +245,50 @@ func (circ *Circuit) InvQFT(start, end int) {
 	}
 }
 
-func (circ *Circuit) Measure(x int) int {
-	prob := [2]float64{0, 0}
+func (circ *Circuit) Measure(qbits ...int) int {
+	qbits = sort.IntSlice(qbits)
+
+	if qbits[0] < 0 || qbits[len(qbits)-1] > circ.N-1 {
+		panic("Invalid registers.")
+	}
+
+	prob := make([]float64, 1<<len(qbits))
 
 	for n, a := range circ.State {
-		prob[(n>>x)%2] += math.Pow(cmplx.Abs(a), 2)
+		o := 0
+		for i, q := range qbits {
+			o += ((n >> q) % 2) << i
+		}
+		prob[o] += math.Pow(cmplx.Abs(a), 2.0)
 	}
 
 	// Wait, Golang does not have weighted sampling? WTF.
 	rand.Seed(time.Now().UnixNano())
 	rand := rand.Float64()
 
-	m := 0
-	if rand < prob[0] {
-		m = 0
-	} else {
-		m = 1
+	output := 0
+	accsum := 0.0
+
+	for i, p := range prob {
+		accsum += p
+		if accsum >= rand {
+			output = i
+			break
+		}
 	}
 
 	for n := range circ.State {
-		if (n>>x)%2 != m {
-			circ.State[n] = 0
+		for i, q := range qbits {
+			if (output>>i)%2 != (n>>q)%2 {
+				circ.State[n] = 0
+				continue
+			}
 		}
 	}
 
 	circ.State = circ.State.Normalize()
 
-	return m
+	return output
 }
 
 func (circ Circuit) StateToString() string {
