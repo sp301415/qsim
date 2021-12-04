@@ -14,10 +14,10 @@ func Zero() vector.Vector {
 
 // Returns |00...0>
 func Zeros(n int) vector.Vector {
-	data := vector.Zeros(numbers.Pow(2, n))
+	data := vector.Zeros(1 << n)
 	data[0] = 1
 
-	return vector.New(data)
+	return data
 }
 
 // Returns |1>
@@ -27,10 +27,10 @@ func One() vector.Vector {
 
 // Returns |11...1>
 func Ones(n int) vector.Vector {
-	data := vector.Zeros(numbers.Pow(2, n))
+	data := vector.Zeros(1 << n)
 	data[len(data)-1] = 1
 
-	return vector.New(data)
+	return data
 }
 
 // Changes cbit to qbit. Useful for initialization.
@@ -38,13 +38,13 @@ func Ones(n int) vector.Vector {
 // If l == 0, then it automatically finds the right size.
 func NewFromCbit(n int, l int) vector.Vector {
 	if l == 0 {
-		l = numbers.Pow(2, numbers.BitLength(n))
+		l = numbers.BitLength(n)
 	}
 
-	q := vector.Zeros(numbers.Pow(2, l))
+	q := vector.Zeros(1 << l)
 	q[n] = 1
 
-	return vector.New(q)
+	return q
 }
 
 func BitLength(q vector.Vector) int {

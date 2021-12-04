@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"sort"
 	"strings"
-	"time"
+	"sync"
 
 	"github.com/sp301415/qsim/math/matrix"
 	"github.com/sp301415/qsim/math/numbers"
@@ -30,49 +30,168 @@ func NewCircuit(n int) Circuit {
 }
 
 func (circ *Circuit) InitQbit(q vector.Vector) {
+	if q.Dim() != (1 << circ.N) {
+		panic("Invalid qbit length.")
+	}
 	circ.State = q
 }
 
-func (circ *Circuit) Apply(operator matrix.Matrix, qbits ...int) {
+func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 	if !operator.IsUnitary() {
 		panic("Operator must be unitary.")
 	}
 
-	if len(operator) != 1<<len(qbits) {
+	if len(operator) != 1<<len(iregs) {
 		panic("Operator size does not match with input qbits.")
 	}
 
-	// Tensor Product takes too long, we need another method.
-	// Idea: decompose state vector to pure states?
-
-	res := vector.Zeros(circ.State.Dim())
-
-	for n, a := range circ.State {
-		if a == 0 {
-			continue
-		}
-		// a * |n>
-		// First, extract input qbits from n
-		// For example, if n = |0101> and qbit = 0, 2, x = |11>
-		x := 0
-		for i, v := range qbits {
-			// Extract vth bit from n, plug it in to ith bit of x.
-			x += ((n >> v) % 2) << i
-		}
-		// Generate new qbit from x, apply operator to it.
-		q := qbit.NewFromCbit(x, len(qbits))
-		q = q.Apply(operator)
-
-		for qx, qa := range q {
-			// Extract ith bit from x, plug it in to vth bit of n.
-			nn := 0
-			for i, v := range qbits {
-				qi := (qx >> i) % 2
-				nn = (n | (1 << v)) - ((qi ^ 1) << v)
-			}
-			res[nn] += a * qa
+	// Special case
+	// If operator is pure => trivial parallelization is possible.
+	// If operator is not pure, but still single qbit
+	// => Actually, almost every gate is single qbit. This case, we can still parallelize somehow.
+	if operator.IsPureGate() {
+		circ.applyPure(operator, iregs...)
+		return
+	} else {
+		if len(iregs) == 1 && circ.N > 1 {
+			circ.applySingle(operator, iregs[0])
+			return
 		}
 	}
+
+	// Generic Fallback.
+
+	// Tensor Product takes too long, we need another method.
+	// Idea: decompose state vector to pure states?
+	res := vector.Zeros(circ.State.Dim())
+
+	for basis, amp := range circ.State {
+		if amp == 0 {
+			continue
+		}
+		// amp * |basis>
+		// First, extract input qbits from basis
+		// For example, if basis = |0101> and amp = 0, 2 => ibasis = |11>
+		ibasis := 0
+		for idx, val := range iregs {
+			// Extract val-th bit from basis, plug it in to idx-th bit of ibasis.
+			ibasis += ((basis >> val) % 2) << idx
+		}
+		// Generate new qbit from x, apply operator to it.
+		newibasis_q := qbit.NewFromCbit(ibasis, len(iregs)).Apply(operator)
+
+		for newibasis, newamp := range newibasis_q {
+			// U*|ibasis> = sum newamp * |newibasis>
+			if newamp == 0 {
+				continue
+			}
+			// Make newbasis by merging newibasis to basis.
+			// Extract idx-th bit from newibasis, plug it in to val-th bit of basis.
+			newbasis := basis
+			for idx, val := range iregs {
+				bit := (newibasis >> idx) % 2
+				newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
+			}
+			res[newbasis] += amp * newamp
+		}
+	}
+
+	circ.State = res
+}
+
+func (circ *Circuit) applySingle(operator matrix.Matrix, ireg int) {
+	// checks for operator is already done in Apply()
+	// Note that operator is assumed to be non-pure.
+
+	wg := &sync.WaitGroup{}
+
+	// We can still parallelize 2^(n-1) loops.
+	// How? Suppose basis = |0101> and ireg = 2.
+	// Then, U|0101> = a|0001> + b|0101>
+	// So, we can "group" |0101> and |0001>, and parallelize for 0, 1, 3th qbit.
+
+	chunksize := (1 << ((circ.N - 1) / 2))
+	res := vector.Zeros(len(circ.State))
+
+	for i := 0; i < (1 << (circ.N - 1)); i += chunksize {
+		wg.Add(1)
+		go func(start int) {
+			defer wg.Done()
+
+			bases := [2]int{0, 0}
+			for n := start; n < start+chunksize; n++ {
+				bases[0] = ((n >> ireg) << (ireg + 1)) + (n % (1 << ireg))
+				bases[1] = bases[0] | (1 << ireg)
+
+				for ibasis, basis := range bases {
+					amp := circ.State[basis]
+					if amp == 0 {
+						continue
+					}
+
+					// Now, same as Apply().
+					newbasis_q := qbit.NewFromCbit(ibasis, 1).Apply(operator)
+
+					// Another interesting fact:
+					// newbasis_q[0] -> bases[0], newbasis_q[1] -> bases[1] by definition!
+					res[bases[0]] += amp * newbasis_q[0]
+					res[bases[1]] += amp * newbasis_q[1]
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	circ.State = res
+}
+
+func (circ *Circuit) applyPure(operator matrix.Matrix, iregs ...int) {
+	// Pure operators are trivially parallelizable.
+
+	wg := &sync.WaitGroup{}
+	chunksize := (1 << (circ.N / 2))
+	res := vector.Zeros(len(circ.State))
+
+	for i := 0; i < circ.State.Dim(); i += chunksize {
+		wg.Add(1)
+		go func(start int) {
+			defer wg.Done()
+
+			for basis := start; basis < start+chunksize; basis++ {
+				amp := circ.State[basis]
+
+				if amp == 0 {
+					continue
+				}
+
+				ibasis := 0
+				for idx, val := range iregs {
+					ibasis += ((basis >> val) % 2) << idx
+				}
+
+				newibasis_q := qbit.NewFromCbit(ibasis, len(iregs)).Apply(operator)
+
+				for newibasis, newamp := range newibasis_q {
+					if newamp == 0 {
+						continue
+					}
+
+					newbasis := basis
+					for idx, val := range iregs {
+						bit := (newibasis >> idx) % 2
+						newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
+					}
+					res[newbasis] = amp * newamp
+
+					// newibasis_q is guaranteed to have only one value, so break.
+					break
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
 
 	circ.State = res
 }
@@ -97,103 +216,221 @@ func (circ *Circuit) H(n int) {
 	circ.Apply(gate.H(), n)
 }
 
-func (circ *Circuit) ControlOperator(operator matrix.Matrix, cs []int, xs []int) {
+func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 	if !operator.IsUnitary() {
-		panic("Operator not unitary.")
+		panic("Operator must be unitary.")
 	}
 
-	if len(operator) != len(xs) {
-		panic("Operator size does not match.")
+	if len(operator) != 1<<len(xs) {
+		panic("Operator size does not match with input qbits.")
 	}
 
-	if len(cs) == 1 && len(xs) == 1 {
-		circ.ControlSingle(operator, cs[0], xs[0])
+	if operator.IsPureGate() {
+		circ.controlPure(operator, cs, xs)
 		return
+	} else {
+		if len(xs) == 1 && circ.N > 1 {
+			circ.controlSingle(operator, cs, xs[0])
+			return
+		}
 	}
 
-	// This is almost same to Apply(), except it checks the control qbit.
+	// Generic Fallback.
+	res := vector.Zeros(circ.State.Dim())
 
-	res := vector.Zeros(len(circ.State))
-
-	for n, a := range circ.State {
-		if a == 0 {
+	for basis, amp := range circ.State {
+		if amp == 0 {
 			continue
 		}
 
 		ctrl := 0
-		for _, c := range cs {
-			ctrl ^= ((n >> c) % 2)
+		for _, v := range cs {
+			ctrl ^= (basis >> v) % 2
 		}
 
 		if ctrl == 0 {
-			res[n] += a
+			res[basis] = amp
 			continue
 		}
 
-		x := 0
-		for i, v := range xs {
-			x += ((n >> v) % 2) << i
+		ibasis := 0
+		for idx, val := range xs {
+			ibasis += ((basis >> val) % 2) << idx
 		}
-		q := qbit.NewFromCbit(x, len(xs))
-		q = q.Apply(operator)
+		newibasis_q := qbit.NewFromCbit(ibasis, len(xs)).Apply(operator)
 
-		for qx, qa := range q {
-			nn := 0
-			for i, v := range xs {
-				qi := (qx >> i) % 2
-				nn = (n | (1 << v)) - ((qi ^ 1) << v)
+		for newibasis, newamp := range newibasis_q {
+			if newamp == 0 {
+				continue
 			}
-			res[nn] += a * qa
+			newbasis := basis
+			for idx, val := range xs {
+				bit := (newibasis >> idx) % 2
+				newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
+			}
+			res[newbasis] += amp * newamp
 		}
 	}
 
 	circ.State = res
 }
 
-// A more efficient implementation, when control/output qbit is single.
-func (circ *Circuit) ControlSingle(operator matrix.Matrix, c int, x int) {
-	res := vector.Zeros(circ.State.Dim())
+func (circ *Circuit) controlSingle(operator matrix.Matrix, cs []int, x int) {
+	// checks for operator is already done in Apply()
+	// Note that operator is assumed to be non-pure.
 
-	for n, a := range circ.State {
-		if a == 0 {
-			continue
-		}
+	wg := &sync.WaitGroup{}
 
-		cc := (n >> c) % 2
-		if cc == 0 {
-			res[n] += a
-			continue
-		}
+	// We can still parallelize 2^(n-1) loops.
+	// How? Suppose basis = |0101> and ireg = 2.
+	// Then, U|0101> = a|0001> + b|0101>
+	// So, we can "group" |0101> and |0001>, and parallelize for 0, 1, 3th qbit.
 
-		qx := qbit.NewFromCbit((n>>x)%2, 1)
-		qx = qx.Apply(operator)
-		nn := n | (1 << x)
+	chunksize := (1 << ((circ.N - 1) / 2))
+	res := vector.Zeros(len(circ.State))
 
-		res[nn] += qx[1] * a
-		res[nn-(1<<x)] += qx[0] * a
+	for i := 0; i < (1 << (circ.N - 1)); i += chunksize {
+		wg.Add(1)
+		go func(start int) {
+			defer wg.Done()
+
+			bases := [2]int{0, 0}
+			for n := start; n < start+chunksize; n++ {
+				bases[0] = ((n >> x) << (x + 1)) + (n % (1 << x))
+				bases[1] = bases[0] | (1 << x)
+
+				ctrl := 0
+				for _, v := range cs {
+					ctrl ^= (bases[0] >> v) % 2
+				}
+
+				if ctrl == 0 {
+					res[bases[0]] = circ.State[bases[0]]
+					res[bases[1]] = circ.State[bases[1]]
+					continue
+				}
+
+				for ibasis, basis := range bases {
+					amp := circ.State[basis]
+					if amp == 0 {
+						continue
+					}
+
+					// Now, same as Apply().
+					newbasis_q := qbit.NewFromCbit(ibasis, 1).Apply(operator)
+
+					// Another interesting fact:
+					// newbasis_q[0] -> bases[0], newbasis_q[1] -> bases[1] by definition!
+					res[bases[0]] += amp * newbasis_q[0]
+					res[bases[1]] += amp * newbasis_q[1]
+				}
+			}
+		}(i)
 	}
 
+	wg.Wait()
+
 	circ.State = res
+}
+
+func (circ *Circuit) controlPure(operator matrix.Matrix, cs []int, xs []int) {
+	// Pure operators are trivially parallelizable.
+
+	wg := &sync.WaitGroup{}
+	chunksize := (1 << (circ.N / 2))
+	res := vector.Zeros(len(circ.State))
+
+	for i := 0; i < circ.State.Dim(); i += chunksize {
+		wg.Add(1)
+		go func(start int) {
+			defer wg.Done()
+
+			for basis := start; basis < start+chunksize; basis++ {
+				amp := circ.State[basis]
+
+				if amp == 0 {
+					continue
+				}
+
+				ctrl := 0
+				for _, v := range cs {
+					ctrl ^= (basis >> v) % 2
+				}
+
+				if ctrl == 0 {
+					res[basis] = amp
+					continue
+				}
+
+				ibasis := 0
+				for idx, val := range xs {
+					ibasis += ((basis >> val) % 2) << idx
+				}
+
+				newibasis_q := qbit.NewFromCbit(ibasis, len(xs)).Apply(operator)
+
+				for newibasis, newamp := range newibasis_q {
+					if newamp == 0 {
+						continue
+					}
+
+					newbasis := basis
+					for idx, val := range xs {
+						bit := (newibasis >> idx) % 2
+						newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
+					}
+					res[newbasis] = amp * newamp
+
+					break
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	circ.State = res
+}
+
+func (circ *Circuit) controlSingleSingle(operator matrix.Matrix, c int, x int) {
+	circ.Control(operator, []int{c}, []int{x})
 }
 
 func (circ *Circuit) CX(c int, x int) {
-	circ.ControlSingle(gate.X(), c, x)
+	circ.controlSingleSingle(gate.X(), c, x)
 }
 
 func (circ *Circuit) Swap(x int, y int) {
-	res := vector.Zeros(len(circ.State))
+	res := vector.Zeros(circ.State.Dim())
 
-	for n, a := range circ.State {
-		bx := (n >> x) % 2
-		by := (n >> y) % 2
+	chunksize := 1 << (circ.N / 2)
+	wg := &sync.WaitGroup{}
 
-		nn := n
+	for i := 0; i < (1 << circ.N); i += chunksize {
+		wg.Add(1)
+		go func(start int) {
+			defer wg.Done()
 
-		nn = (nn | (1 << x)) - ((by ^ 1) << x)
-		nn = (nn | (1 << y)) - ((bx ^ 1) << y)
+			for n := start; n < start+chunksize; n++ {
+				a := circ.State[n]
+				if a == 0 {
+					continue
+				}
 
-		res[nn] = a
+				bx := (n >> x) % 2
+				by := (n >> y) % 2
+
+				nn := n
+
+				nn = (nn | (1 << x)) - ((by ^ 1) << x)
+				nn = (nn | (1 << y)) - ((bx ^ 1) << y)
+
+				res[nn] = a
+			}
+		}(i)
 	}
+
+	wg.Wait()
 
 	circ.State = res
 }
@@ -212,7 +449,7 @@ func (circ *Circuit) QFT(start, end int) {
 		circ.H(i)
 
 		for j := start; j < i; j++ {
-			circ.ControlSingle(gate.P(math.Pi/float64(numbers.Pow(2, i-j))), j, i)
+			circ.controlSingleSingle(gate.P(math.Pi/float64(numbers.Pow(2, i-j))), j, i)
 		}
 	}
 
@@ -237,7 +474,7 @@ func (circ *Circuit) InvQFT(start, end int) {
 
 	for i := start; i < end; i++ {
 		for j := start; j < i; j++ {
-			circ.ControlSingle(gate.P(-math.Pi/float64(numbers.Pow(2, i-j))), j, i)
+			circ.controlSingleSingle(gate.P(-math.Pi/float64(numbers.Pow(2, i-j))), j, i)
 		}
 		circ.H(i)
 	}
@@ -264,7 +501,6 @@ func (circ *Circuit) Measure(qbits ...int) int {
 	}
 
 	// Wait, Golang does not have weighted sampling? WTF.
-	rand.Seed(time.Now().UnixNano())
 	rand := rand.Float64()
 
 	output := 0

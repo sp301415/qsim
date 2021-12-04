@@ -219,3 +219,19 @@ func (m Matrix) IsUnitary() bool {
 
 	return Mul(m, m.Dagger()).Equals(id)
 }
+
+func (m Matrix) IsPureGate() bool {
+	for _, row := range m {
+		zerocnt := 0
+		for _, v := range row {
+			if v == 0 {
+				zerocnt++
+			}
+		}
+		if zerocnt != len(m)-1 {
+			return false
+		}
+	}
+
+	return true
+}

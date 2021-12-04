@@ -23,6 +23,35 @@ func TestInitQbits(t *testing.T) {
 	}
 }
 
+func TestX(t *testing.T) {
+	c := qsim.NewCircuit(10)
+
+	for i := 0; i < 10; i++ {
+		c.X(i)
+	}
+
+	if !c.State.Equals(qbit.NewFromCbit((1<<10)-1, 10)) {
+		t.Fail()
+	}
+}
+
+func BenchmarkApply(t *testing.B) {
+	N := 16
+	c := qsim.NewCircuit(N)
+
+	for i := 0; i < N; i++ {
+		c.Apply(gate.X(), i)
+	}
+
+	for i := 0; i < N; i++ {
+		c.Apply(gate.X(), i)
+	}
+
+	if !c.State.Equals(qbit.NewFromCbit(0, N)) {
+		t.Fail()
+	}
+}
+
 func TestApplyNonEntagled(t *testing.T) {
 	c := qsim.NewCircuit(2)
 
@@ -40,9 +69,6 @@ func TestApplyEntangled(t *testing.T) {
 	c := qsim.NewCircuit(2)
 	c.H(0)
 	c.CX(0, 1)
-
-	fmt.Println(c.StateToString())
-
 	q := vector.New([]complex128{complex(1/math.Sqrt(2), 0), 0, 0, complex(1/math.Sqrt(2), 0)})
 
 	if !q.Equals(c.State) {
@@ -52,10 +78,14 @@ func TestApplyEntangled(t *testing.T) {
 
 func TestQFT(t *testing.T) {
 	c := qsim.NewCircuit(2)
-	c.InitQbit(qbit.NewFromCbit(1, 2))
+	c.X(0)
 	c.QFT(0, 2)
 
-	fmt.Println(c.StateToString())
+	q := vector.New([]complex128{0.5, 0.5i, -0.5, -0.5i})
+
+	if !c.State.Equals(q) {
+		t.Fail()
+	}
 }
 func TestQFTInvQFT(t *testing.T) {
 	c := qsim.NewCircuit(3)
@@ -67,6 +97,11 @@ func TestQFTInvQFT(t *testing.T) {
 	if !c.State.Equals(qbit.NewFromCbit(3, 3)) {
 		t.Fail()
 	}
+}
+
+func BenchmarkQFT(t *testing.B) {
+	c := qsim.NewCircuit(16)
+	c.QFT(0, 16)
 }
 
 func TestMeasure(t *testing.T) {
