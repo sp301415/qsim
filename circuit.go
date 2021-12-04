@@ -107,12 +107,16 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 	// If operator is pure => trivial parallelization is possible.
 	// If operator is not pure, but still single qbit
 	// => Actually, almost every gate is single qbit. This case, we can still parallelize somehow.
-	if operator.IsPureGate() {
-		circ.applyPure(operator, iregs...)
-		return
-	} else if len(iregs) == 1 && circ.N > 1 {
-		circ.applySingle(operator, iregs[0])
-		return
+	if circ.N > 1 {
+		if operator.IsPureGate() {
+			circ.applyPure(operator, iregs...)
+			return
+		}
+
+		if len(iregs) == 1 {
+			circ.applySingle(operator, iregs[0])
+			return
+		}
 	}
 
 	// Generic Fallback.
@@ -217,7 +221,7 @@ func (circ *Circuit) applyPure(operator matrix.Matrix, iregs ...int) {
 	}
 
 	wg := &sync.WaitGroup{}
-	chunksize := (1 << (circ.N / 2))
+	chunksize := 1 << (circ.N / 2)
 	copy(circ.temp, ZEROVEC)
 
 	for i := 0; i < circ.State.Dim(); i += chunksize {
@@ -284,12 +288,16 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 		panic("Operator size does not match with input qbits.")
 	}
 
-	if operator.IsPureGate() {
-		circ.controlPure(operator, cs, xs)
-		return
-	} else if len(xs) == 1 && circ.N > 1 {
-		circ.controlSingle(operator, cs, xs[0])
-		return
+	if circ.N > 1 {
+		if operator.IsPureGate() {
+			circ.controlPure(operator, cs, xs)
+			return
+		}
+
+		if len(xs) == 1 {
+			circ.controlSingle(operator, cs, xs[0])
+			return
+		}
 	}
 
 	// Generic Fallback.
@@ -367,8 +375,6 @@ func (circ *Circuit) controlSingle(operator matrix.Matrix, cs []int, x int) {
 						continue
 					}
 
-					// Another interesting fact:
-					// newbasis_q[0] -> bases[0], newbasis_q[1] -> bases[1] by definition!
 					circ.temp[bases[0]] += amp * memo[0][ibasis]
 					circ.temp[bases[1]] += amp * memo[1][ibasis]
 				}
@@ -453,12 +459,16 @@ func (circ *Circuit) CX(c int, x int) {
 	circ.controlSingleSingle(gate.X(), c, x)
 }
 
+func (circ *Circuit) CCX(c1, c2, x int) {
+	circ.controlSingle(gate.X(), []int{c1, c2}, x)
+}
+
 func (circ *Circuit) Swap(x int, y int) {
 	chunksize := 1 << (circ.N / 2)
 	wg := &sync.WaitGroup{}
 	copy(circ.temp, ZEROVEC)
 
-	for i := 0; i < (1 << circ.N); i += chunksize {
+	for i := 0; i < len(circ.State); i += chunksize {
 		wg.Add(1)
 		go func(start int) {
 			defer wg.Done()
@@ -497,11 +507,17 @@ func (circ *Circuit) QFT(start, end int) {
 		panic("Invalid start / end parameters.")
 	}
 
+	phis := make([]float64, end-start)
+
+	for i := range phis {
+		phis[i] = math.Pi / math.Pow(2.0, float64(i))
+	}
+
 	for i := end - 1; i >= start; i-- {
 		circ.H(i)
 
 		for j := start; j < i; j++ {
-			circ.controlSingleSingle(gate.P(math.Pi/float64(numbers.Pow(2, i-j))), j, i)
+			circ.controlSingleSingle(gate.P(phis[i-j]), j, i)
 		}
 	}
 
@@ -524,9 +540,15 @@ func (circ *Circuit) InvQFT(start, end int) {
 		circ.Swap(i, j)
 	}
 
+	phis := make([]float64, end-start)
+
+	for i := range phis {
+		phis[i] = -math.Pi / math.Pow(2.0, float64(i))
+	}
+
 	for i := start; i < end; i++ {
 		for j := start; j < i; j++ {
-			circ.controlSingleSingle(gate.P(-math.Pi/float64(numbers.Pow(2, i-j))), j, i)
+			circ.controlSingleSingle(gate.P(phis[i-j]), j, i)
 		}
 		circ.H(i)
 	}
