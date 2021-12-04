@@ -7,9 +7,28 @@ import (
 )
 
 func BenchmarkShor15(t *testing.B) {
-	shor.Shor(15)
+	N := 15
+	factor := shor.Shor(N)
+
+	if N%factor != 0 {
+		t.Fail()
+	}
 }
 
 func BenchmarkShor35(t *testing.B) {
-	shor.Shor(35)
+	N := 35
+	factor := shor.Shor(N)
+
+	if N%factor != 0 {
+		t.Fail()
+	}
+}
+
+func BenchmarkShor55(t *testing.B) {
+	N := 55
+	factor := shor.Shor(N)
+
+	if N%factor != 0 {
+		t.Fail()
+	}
 }

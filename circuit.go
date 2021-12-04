@@ -42,6 +42,58 @@ func (circ *Circuit) InitQbit(q vector.Vector) {
 	circ.State = q
 }
 
+func (circ *Circuit) InitCbit(n int) {
+	if numbers.BitLength(n) > circ.N {
+		panic("Invalid cbit length.")
+	}
+
+	circ.State = qbit.NewFromCbit(n, circ.N)
+}
+
+// NOTE: This function DOES NOT check if oracle is unitary. Use at your own risk.
+func (circ *Circuit) ApplyOracle(oracle func(int) int, iregs []int, oregs []int) {
+	if len(iregs) == 0 || len(oregs) == 0 {
+		panic("Invalid input/output registers.")
+	}
+
+	wg := &sync.WaitGroup{}
+	chunksize := 1 << (circ.N / 2)
+	copy(circ.temp, ZEROVEC)
+
+	for i := 0; i < len(circ.State); i += chunksize {
+		wg.Add(1)
+		go func(start int) {
+			defer wg.Done()
+
+			for basis := start; basis < start+chunksize; basis++ {
+				amp := circ.State[basis]
+				if amp == 0 {
+					continue
+				}
+
+				input := 0
+				for idx, val := range iregs {
+					input += ((basis >> val) % 2) << idx
+				}
+
+				output := oracle(input)
+
+				newbasis := basis
+				for idx, val := range oregs {
+					bit := (output >> idx) % 2
+					newbasis ^= bit << val
+				}
+
+				circ.temp[newbasis] += amp
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	copy(circ.State, circ.temp)
+}
+
 func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 	if !operator.IsUnitary() {
 		panic("Operator must be unitary.")
@@ -135,8 +187,6 @@ func (circ *Circuit) applySingle(operator matrix.Matrix, ireg int) {
 						continue
 					}
 
-					// Another interesting fact:
-					// newbasis_q[0] -> bases[0], newbasis_q[1] -> bases[1] by definition!
 					circ.temp[bases[0]] += amp * memo[0][ibasis]
 					circ.temp[bases[1]] += amp * memo[1][ibasis]
 				}

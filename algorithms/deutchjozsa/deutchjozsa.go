@@ -3,7 +3,6 @@ package deutchjozsa
 import (
 	"github.com/sp301415/qsim"
 	"github.com/sp301415/qsim/math/numbers"
-	"github.com/sp301415/qsim/math/vector"
 	"github.com/sp301415/qsim/quantum/qbit"
 )
 
@@ -21,38 +20,13 @@ func ConstantFunc(x int) int {
 	return 0
 }
 
-func BalancedOracle(regs vector.Vector, n int) vector.Vector {
-	// Input: n, Output: 1
-	if regs.Dim() != 1<<(n+1) {
-		panic("Invalid size of registers.")
-	}
-
-	res := vector.Zeros(regs.Dim())
-
-	for x, a := range regs {
-		res[x^BalancedFunc(x>>1)] += a
-	}
-
-	return res
-}
-
-func ConstantOracle(regs vector.Vector, n int) vector.Vector {
-	// Input: n, Output: 1
-	if regs.Dim() != 1<<(n+1) {
-		panic("Invalid size of registers.")
-	}
-
-	res := vector.Zeros(regs.Dim())
-
-	for x, a := range regs {
-		res[x^ConstantFunc(x>>1)] += a
-	}
-
-	return res
-}
-
 // Returns true if oracle is constant. false if it is not.
-func DeutchJozsa(n int, oracle func(vector.Vector, int) vector.Vector) bool {
+func DeutchJozsa(n int, oracle func(int) int) bool {
+	iregs := make([]int, n)
+	for i := range iregs {
+		iregs[i] = i + 1
+	}
+
 	// Prepare n + 1 registers with |0...01>.
 	q := qsim.NewCircuit(n + 1)
 	q.InitQbit(qbit.NewFromCbit(1, n+1))
@@ -63,20 +37,25 @@ func DeutchJozsa(n int, oracle func(vector.Vector, int) vector.Vector) bool {
 	}
 
 	// Apply Oracle!
-	q.State = oracle(q.State, n)
+	// fmt.Println(q.StateToString())
+
+	q.ApplyOracle(oracle, iregs, []int{0})
+
+	// fmt.Println(q.StateToString())
 
 	// Hadamard, then Measure
-	for i := 1; i < n+1; i++ {
-		q.H(i)
+	for _, v := range iregs {
+		q.H(v)
 	}
+	res := q.Measure(iregs...)
 
-	mslice := make([]int, n)
-	for i := range mslice {
-		mslice[i] = i + 1
+	if res == 0 {
+		return true
+	} else if res == (1<<n)-1 {
+		return false
+	} else {
+		panic("INVALID MEASUREMENT")
 	}
-	res := q.Measure(mslice...)
-
-	return res == 0
 }
 
 // Returns true if oracle is constant. false if it is not.

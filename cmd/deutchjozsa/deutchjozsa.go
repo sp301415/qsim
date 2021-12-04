@@ -25,13 +25,13 @@ func main() {
 	is_constant := *typePtr == "c"
 
 	if is_constant {
-		if deutchjozsa.DeutchJozsa(n, deutchjozsa.ConstantOracle) {
+		if deutchjozsa.DeutchJozsa(n, deutchjozsa.ConstantFunc) {
 			fmt.Println("Deutch Jozsa Says: This function is CONSTANT!")
 		} else {
 			fmt.Println("Seems like Deutch Jozsa is wrong :(")
 		}
 	} else {
-		if !deutchjozsa.DeutchJozsa(n, deutchjozsa.BalancedOracle) {
+		if !deutchjozsa.DeutchJozsa(n, deutchjozsa.BalancedFunc) {
 			fmt.Println("Deutch Jozsa Says: This function is BALANCED!")
 		} else {
 			fmt.Println("Seems like Deutch Jozsa is wrong :(")

@@ -7,8 +7,6 @@ import (
 	"github.com/sp301415/qsim"
 	"github.com/sp301415/qsim/math/fraction"
 	"github.com/sp301415/qsim/math/numbers"
-	"github.com/sp301415/qsim/math/vector"
-	"github.com/sp301415/qsim/quantum/qbit"
 )
 
 func shorInstance(N int, verbose bool) int {
@@ -40,28 +38,28 @@ func shorInstance(N int, verbose bool) int {
 
 	// Quantum Part.
 	q := qsim.NewCircuit(3 * n)
-	q.InitQbit(qbit.NewFromCbit((1<<n)-1, 3*n))
+	q.InitCbit((1 << n) - 1)
 
-	for i := n; i < 3*n; i++ {
-		q.H(i)
+	iregs := make([]int, 2*n)
+	oregs := make([]int, n)
+
+	for i := range iregs {
+		iregs[i] = i + n
+	}
+	for i := range oregs {
+		oregs[i] = i
 	}
 
-	newState := vector.Zeros(q.State.Dim())
+	for _, v := range iregs {
+		q.H(v)
+	}
 
 	if verbose {
 		fmt.Println("[*] Applying Shor's Oracle...")
 	}
 
-	for qn, qa := range q.State {
-		if qa == 0 {
-			continue
-		}
-		x := qn >> n
-		r := numbers.PowMod(a, x, N)
-		o := (qn % (1 << n)) ^ r
-		newState[(x<<n)+o] += qa
-	}
-	q.State = newState
+	oracle := func(x int) int { return numbers.PowMod(a, x, N) }
+	q.ApplyOracle(oracle, iregs, oregs)
 
 	if verbose {
 		fmt.Println("[*] Applying Inverse QFT...")
@@ -73,11 +71,7 @@ func shorInstance(N int, verbose bool) int {
 		fmt.Println("[*] Measuring...")
 	}
 
-	mslice := make([]int, 2*n)
-	for i := range mslice {
-		mslice[i] = i + n
-	}
-	y := q.Measure(mslice...)
+	y := q.Measure(iregs...)
 
 	if verbose {
 		fmt.Printf("[+] Found y: %d\n", y)
