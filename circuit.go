@@ -58,11 +58,9 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 	if operator.IsPureGate() {
 		circ.applyPure(operator, iregs...)
 		return
-	} else {
-		if len(iregs) == 1 && circ.N > 1 {
-			circ.applySingle(operator, iregs[0])
-			return
-		}
+	} else if len(iregs) == 1 && circ.N > 1 {
+		circ.applySingle(operator, iregs[0])
+		return
 	}
 
 	// Generic Fallback.
@@ -119,6 +117,8 @@ func (circ *Circuit) applySingle(operator matrix.Matrix, ireg int) {
 	chunksize := (1 << ((circ.N - 1) / 2))
 	copy(circ.temp, ZEROVEC)
 
+	memo := [2][2]complex128{{operator[0][0], operator[1][0]}, {operator[0][1], operator[1][1]}}
+
 	for i := 0; i < (1 << (circ.N - 1)); i += chunksize {
 		wg.Add(1)
 		go func(start int) {
@@ -135,13 +135,10 @@ func (circ *Circuit) applySingle(operator matrix.Matrix, ireg int) {
 						continue
 					}
 
-					// Now, same as Apply().
-					newbasis_q := qbit.NewFromCbit(ibasis, 1).Apply(operator)
-
 					// Another interesting fact:
 					// newbasis_q[0] -> bases[0], newbasis_q[1] -> bases[1] by definition!
-					circ.temp[bases[0]] += amp * newbasis_q[0]
-					circ.temp[bases[1]] += amp * newbasis_q[1]
+					circ.temp[bases[0]] += amp * memo[0][ibasis]
+					circ.temp[bases[1]] += amp * memo[1][ibasis]
 				}
 			}
 		}(i)
@@ -154,6 +151,20 @@ func (circ *Circuit) applySingle(operator matrix.Matrix, ireg int) {
 
 func (circ *Circuit) applyPure(operator matrix.Matrix, iregs ...int) {
 	// Pure operators are trivially parallelizable.
+
+	// Precomputate maps.
+	memo_basis := make([]int, 1<<len(iregs))
+	memo_amp := make([]complex128, 1<<len(iregs))
+
+	for i, row := range operator {
+		for j := range row {
+			if operator[j][i] != 0 {
+				memo_basis[i] = j
+				memo_amp[i] = operator[j][i]
+				break
+			}
+		}
+	}
 
 	wg := &sync.WaitGroup{}
 	chunksize := (1 << (circ.N / 2))
@@ -176,23 +187,15 @@ func (circ *Circuit) applyPure(operator matrix.Matrix, iregs ...int) {
 					ibasis += ((basis >> val) % 2) << idx
 				}
 
-				newibasis_q := qbit.NewFromCbit(ibasis, len(iregs)).Apply(operator)
+				newibasis := memo_basis[ibasis]
+				newamp := memo_amp[ibasis]
 
-				for newibasis, newamp := range newibasis_q {
-					if newamp == 0 {
-						continue
-					}
-
-					newbasis := basis
-					for idx, val := range iregs {
-						bit := (newibasis >> idx) % 2
-						newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
-					}
-					circ.temp[newbasis] = amp * newamp
-
-					// newibasis_q is guaranteed to have only one value, so break.
-					break
+				newbasis := basis
+				for idx, val := range iregs {
+					bit := (newibasis >> idx) % 2
+					newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
 				}
+				circ.temp[newbasis] = amp * newamp
 			}
 		}(i)
 	}
@@ -234,11 +237,9 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 	if operator.IsPureGate() {
 		circ.controlPure(operator, cs, xs)
 		return
-	} else {
-		if len(xs) == 1 && circ.N > 1 {
-			circ.controlSingle(operator, cs, xs[0])
-			return
-		}
+	} else if len(xs) == 1 && circ.N > 1 {
+		circ.controlSingle(operator, cs, xs[0])
+		return
 	}
 
 	// Generic Fallback.
@@ -282,18 +283,12 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 }
 
 func (circ *Circuit) controlSingle(operator matrix.Matrix, cs []int, x int) {
-	// checks for operator is already done in Apply()
-	// Note that operator is assumed to be non-pure.
-
 	wg := &sync.WaitGroup{}
-
-	// We can still parallelize 2^(n-1) loops.
-	// How? Suppose basis = |0101> and ireg = 2.
-	// Then, U|0101> = a|0001> + b|0101>
-	// So, we can "group" |0101> and |0001>, and parallelize for 0, 1, 3th qbit.
 
 	chunksize := (1 << ((circ.N - 1) / 2))
 	copy(circ.temp, ZEROVEC)
+
+	memo := [2][2]complex128{{operator[0][0], operator[1][0]}, {operator[0][1], operator[1][1]}}
 
 	for i := 0; i < (1 << (circ.N - 1)); i += chunksize {
 		wg.Add(1)
@@ -322,13 +317,10 @@ func (circ *Circuit) controlSingle(operator matrix.Matrix, cs []int, x int) {
 						continue
 					}
 
-					// Now, same as Apply().
-					newbasis_q := qbit.NewFromCbit(ibasis, 1).Apply(operator)
-
 					// Another interesting fact:
 					// newbasis_q[0] -> bases[0], newbasis_q[1] -> bases[1] by definition!
-					circ.temp[bases[0]] += amp * newbasis_q[0]
-					circ.temp[bases[1]] += amp * newbasis_q[1]
+					circ.temp[bases[0]] += amp * memo[0][ibasis]
+					circ.temp[bases[1]] += amp * memo[1][ibasis]
 				}
 			}
 		}(i)
@@ -340,7 +332,19 @@ func (circ *Circuit) controlSingle(operator matrix.Matrix, cs []int, x int) {
 }
 
 func (circ *Circuit) controlPure(operator matrix.Matrix, cs []int, xs []int) {
-	// Pure operators are trivially parallelizable.
+	// Precomputate maps.
+	memo_basis := make([]int, 1<<len(xs))
+	memo_amp := make([]complex128, 1<<len(xs))
+
+	for i, row := range operator {
+		for j := range row {
+			if operator[j][i] != 0 {
+				memo_basis[i] = j
+				memo_amp[i] = operator[j][i]
+				break
+			}
+		}
+	}
 
 	wg := &sync.WaitGroup{}
 	chunksize := (1 << (circ.N / 2))
@@ -373,22 +377,15 @@ func (circ *Circuit) controlPure(operator matrix.Matrix, cs []int, xs []int) {
 					ibasis += ((basis >> val) % 2) << idx
 				}
 
-				newibasis_q := qbit.NewFromCbit(ibasis, len(xs)).Apply(operator)
+				newibasis := memo_basis[ibasis]
+				newamp := memo_amp[ibasis]
 
-				for newibasis, newamp := range newibasis_q {
-					if newamp == 0 {
-						continue
-					}
-
-					newbasis := basis
-					for idx, val := range xs {
-						bit := (newibasis >> idx) % 2
-						newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
-					}
-					circ.temp[newbasis] = amp * newamp
-
-					break
+				newbasis := basis
+				for idx, val := range xs {
+					bit := (newibasis >> idx) % 2
+					newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
 				}
+				circ.temp[newbasis] = amp * newamp
 			}
 		}(i)
 	}
