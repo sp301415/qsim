@@ -17,16 +17,22 @@ import (
 	"github.com/sp301415/qsim/quantum/qbit"
 )
 
+var ZEROVEC vector.Vector
+
 type Circuit struct {
 	// Why save gates when we don't need diagram? :)
 	N     int
 	State vector.Vector
+	temp  vector.Vector
 }
 
 func NewCircuit(n int) Circuit {
-	q := qbit.Zeros(n)
+	ZEROVEC = vector.Zeros(1 << n)
 
-	return Circuit{N: n, State: q}
+	q := qbit.Zeros(n)
+	temp := vector.Zeros(1 << n)
+
+	return Circuit{N: n, State: q, temp: temp}
 }
 
 func (circ *Circuit) InitQbit(q vector.Vector) {
@@ -63,7 +69,7 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 
 	// Tensor Product takes too long, we need another method.
 	// Idea: decompose state vector to pure states?
-	res := vector.Zeros(circ.State.Dim())
+	copy(circ.temp, ZEROVEC)
 
 	for basis, amp := range circ.State {
 		if amp == 0 {
@@ -92,11 +98,11 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 				bit := (newibasis >> idx) % 2
 				newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
 			}
-			res[newbasis] += amp * newamp
+			circ.temp[newbasis] += amp * newamp
 		}
 	}
 
-	circ.State = res
+	copy(circ.State, circ.temp)
 }
 
 func (circ *Circuit) applySingle(operator matrix.Matrix, ireg int) {
@@ -111,7 +117,7 @@ func (circ *Circuit) applySingle(operator matrix.Matrix, ireg int) {
 	// So, we can "group" |0101> and |0001>, and parallelize for 0, 1, 3th qbit.
 
 	chunksize := (1 << ((circ.N - 1) / 2))
-	res := vector.Zeros(len(circ.State))
+	copy(circ.temp, ZEROVEC)
 
 	for i := 0; i < (1 << (circ.N - 1)); i += chunksize {
 		wg.Add(1)
@@ -134,8 +140,8 @@ func (circ *Circuit) applySingle(operator matrix.Matrix, ireg int) {
 
 					// Another interesting fact:
 					// newbasis_q[0] -> bases[0], newbasis_q[1] -> bases[1] by definition!
-					res[bases[0]] += amp * newbasis_q[0]
-					res[bases[1]] += amp * newbasis_q[1]
+					circ.temp[bases[0]] += amp * newbasis_q[0]
+					circ.temp[bases[1]] += amp * newbasis_q[1]
 				}
 			}
 		}(i)
@@ -143,7 +149,7 @@ func (circ *Circuit) applySingle(operator matrix.Matrix, ireg int) {
 
 	wg.Wait()
 
-	circ.State = res
+	copy(circ.State, circ.temp)
 }
 
 func (circ *Circuit) applyPure(operator matrix.Matrix, iregs ...int) {
@@ -151,7 +157,7 @@ func (circ *Circuit) applyPure(operator matrix.Matrix, iregs ...int) {
 
 	wg := &sync.WaitGroup{}
 	chunksize := (1 << (circ.N / 2))
-	res := vector.Zeros(len(circ.State))
+	copy(circ.temp, ZEROVEC)
 
 	for i := 0; i < circ.State.Dim(); i += chunksize {
 		wg.Add(1)
@@ -182,7 +188,7 @@ func (circ *Circuit) applyPure(operator matrix.Matrix, iregs ...int) {
 						bit := (newibasis >> idx) % 2
 						newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
 					}
-					res[newbasis] = amp * newamp
+					circ.temp[newbasis] = amp * newamp
 
 					// newibasis_q is guaranteed to have only one value, so break.
 					break
@@ -193,7 +199,7 @@ func (circ *Circuit) applyPure(operator matrix.Matrix, iregs ...int) {
 
 	wg.Wait()
 
-	circ.State = res
+	copy(circ.State, circ.temp)
 }
 
 func (circ *Circuit) I(n int) {
@@ -236,7 +242,7 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 	}
 
 	// Generic Fallback.
-	res := vector.Zeros(circ.State.Dim())
+	copy(circ.temp, ZEROVEC)
 
 	for basis, amp := range circ.State {
 		if amp == 0 {
@@ -249,7 +255,7 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 		}
 
 		if ctrl == 0 {
-			res[basis] = amp
+			circ.temp[basis] = amp
 			continue
 		}
 
@@ -268,11 +274,11 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 				bit := (newibasis >> idx) % 2
 				newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
 			}
-			res[newbasis] += amp * newamp
+			circ.temp[newbasis] += amp * newamp
 		}
 	}
 
-	circ.State = res
+	copy(circ.State, circ.temp)
 }
 
 func (circ *Circuit) controlSingle(operator matrix.Matrix, cs []int, x int) {
@@ -287,7 +293,7 @@ func (circ *Circuit) controlSingle(operator matrix.Matrix, cs []int, x int) {
 	// So, we can "group" |0101> and |0001>, and parallelize for 0, 1, 3th qbit.
 
 	chunksize := (1 << ((circ.N - 1) / 2))
-	res := vector.Zeros(len(circ.State))
+	copy(circ.temp, ZEROVEC)
 
 	for i := 0; i < (1 << (circ.N - 1)); i += chunksize {
 		wg.Add(1)
@@ -305,8 +311,8 @@ func (circ *Circuit) controlSingle(operator matrix.Matrix, cs []int, x int) {
 				}
 
 				if ctrl == 0 {
-					res[bases[0]] = circ.State[bases[0]]
-					res[bases[1]] = circ.State[bases[1]]
+					circ.temp[bases[0]] = circ.State[bases[0]]
+					circ.temp[bases[1]] = circ.State[bases[1]]
 					continue
 				}
 
@@ -321,8 +327,8 @@ func (circ *Circuit) controlSingle(operator matrix.Matrix, cs []int, x int) {
 
 					// Another interesting fact:
 					// newbasis_q[0] -> bases[0], newbasis_q[1] -> bases[1] by definition!
-					res[bases[0]] += amp * newbasis_q[0]
-					res[bases[1]] += amp * newbasis_q[1]
+					circ.temp[bases[0]] += amp * newbasis_q[0]
+					circ.temp[bases[1]] += amp * newbasis_q[1]
 				}
 			}
 		}(i)
@@ -330,7 +336,7 @@ func (circ *Circuit) controlSingle(operator matrix.Matrix, cs []int, x int) {
 
 	wg.Wait()
 
-	circ.State = res
+	copy(circ.State, circ.temp)
 }
 
 func (circ *Circuit) controlPure(operator matrix.Matrix, cs []int, xs []int) {
@@ -338,7 +344,7 @@ func (circ *Circuit) controlPure(operator matrix.Matrix, cs []int, xs []int) {
 
 	wg := &sync.WaitGroup{}
 	chunksize := (1 << (circ.N / 2))
-	res := vector.Zeros(len(circ.State))
+	copy(circ.temp, ZEROVEC)
 
 	for i := 0; i < circ.State.Dim(); i += chunksize {
 		wg.Add(1)
@@ -358,7 +364,7 @@ func (circ *Circuit) controlPure(operator matrix.Matrix, cs []int, xs []int) {
 				}
 
 				if ctrl == 0 {
-					res[basis] = amp
+					circ.temp[basis] = amp
 					continue
 				}
 
@@ -379,7 +385,7 @@ func (circ *Circuit) controlPure(operator matrix.Matrix, cs []int, xs []int) {
 						bit := (newibasis >> idx) % 2
 						newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
 					}
-					res[newbasis] = amp * newamp
+					circ.temp[newbasis] = amp * newamp
 
 					break
 				}
@@ -389,7 +395,7 @@ func (circ *Circuit) controlPure(operator matrix.Matrix, cs []int, xs []int) {
 
 	wg.Wait()
 
-	circ.State = res
+	copy(circ.State, circ.temp)
 }
 
 func (circ *Circuit) controlSingleSingle(operator matrix.Matrix, c int, x int) {
@@ -401,10 +407,9 @@ func (circ *Circuit) CX(c int, x int) {
 }
 
 func (circ *Circuit) Swap(x int, y int) {
-	res := vector.Zeros(circ.State.Dim())
-
 	chunksize := 1 << (circ.N / 2)
 	wg := &sync.WaitGroup{}
+	copy(circ.temp, ZEROVEC)
 
 	for i := 0; i < (1 << circ.N); i += chunksize {
 		wg.Add(1)
@@ -425,14 +430,14 @@ func (circ *Circuit) Swap(x int, y int) {
 				nn = (nn | (1 << x)) - ((by ^ 1) << x)
 				nn = (nn | (1 << y)) - ((bx ^ 1) << y)
 
-				res[nn] = a
+				circ.temp[nn] = a
 			}
 		}(i)
 	}
 
 	wg.Wait()
 
-	circ.State = res
+	copy(circ.State, circ.temp)
 }
 
 // QFT from [start, end)
@@ -514,14 +519,26 @@ func (circ *Circuit) Measure(qbits ...int) int {
 		}
 	}
 
-	for n := range circ.State {
-		for i, q := range qbits {
-			if (output>>i)%2 != (n>>q)%2 {
-				circ.State[n] = 0
-				continue
+	chunksize := 1 << (circ.N / 2)
+	wg := &sync.WaitGroup{}
+
+	for i := 0; i < len(circ.State); i += chunksize {
+		wg.Add(1)
+		go func(start int) {
+			defer wg.Done()
+
+			for n := start; n < start+chunksize; n++ {
+				for i, q := range qbits {
+					if (output>>i)%2 != (n>>q)%2 {
+						circ.State[n] = 0
+						continue
+					}
+				}
 			}
-		}
+		}(i)
 	}
+
+	wg.Wait()
 
 	circ.State = circ.State.Normalize()
 

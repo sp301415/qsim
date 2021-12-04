@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/sp301415/qsim"
+	"github.com/sp301415/qsim/math/matrix"
 	"github.com/sp301415/qsim/math/vector"
 	"github.com/sp301415/qsim/quantum/gate"
 	"github.com/sp301415/qsim/quantum/qbit"
@@ -50,6 +51,33 @@ func BenchmarkApply(t *testing.B) {
 	if !c.State.Equals(qbit.NewFromCbit(0, N)) {
 		t.Fail()
 	}
+}
+
+func BenchmarkApplyNonPurewOp(t *testing.B) {
+	N := 8
+	c := qsim.NewCircuit(N)
+
+	t.StartTimer()
+	for i := 0; i < N; i++ {
+		c.H(i)
+	}
+}
+
+func BenchmarkApplyNonPurewoOp(t *testing.B) {
+	N := 8
+	c := qsim.NewCircuit(N)
+	Hs := make([]matrix.Matrix, N)
+	idx := make([]int, N)
+
+	for i := range Hs {
+		Hs[i] = gate.H()
+		idx[i] = i
+	}
+
+	t.StartTimer()
+
+	H := matrix.Tensor(Hs...)
+	c.Apply(H, idx...)
 }
 
 func TestApplyNonEntagled(t *testing.T) {
