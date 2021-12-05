@@ -33,8 +33,7 @@ func Ones(n int) vector.Vector {
 	return data
 }
 
-// Changes cbit to qbit. Useful for initialization.
-// Note: l denotes the size of the qbit.
+// Changes cbit to qbit. l denotes the size of the qbit.
 // If l == 0, then it automatically finds the right size.
 func NewFromCbit(n int, l int) vector.Vector {
 	if l == 0 {
@@ -45,8 +44,4 @@ func NewFromCbit(n int, l int) vector.Vector {
 	q[n] = 1
 
 	return q
-}
-
-func BitLength(q vector.Vector) int {
-	return numbers.BitLength(q.Dim())
 }

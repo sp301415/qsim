@@ -178,6 +178,7 @@ func (v Vector) Apply(m matrix.Matrix) Vector {
 	return res
 }
 
+// Returns the normalized vector.
 func (v Vector) Normalize() Vector {
 	norm := 0.0
 	for _, n := range v {

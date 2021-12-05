@@ -41,20 +41,7 @@ func GCD(a, b int) int {
 	return a
 }
 
-// Returns integer log base 2.
-func Log2(n int) int {
-	res := 0
-	n >>= 1
-
-	for n > 0 {
-		res++
-		n >>= 1
-	}
-
-	return res
-}
-
-// Returns binary length of number
+// Returns binary length of number.
 func BitLength(n int) int {
 	if n == 0 {
 		return 1
@@ -69,18 +56,36 @@ func BitLength(n int) int {
 	return len
 }
 
-func Min(a, b int) int {
-	if a < b {
-		return a
+// Returns the smallest number.
+func Min(ns ...int) int {
+	if len(ns) == 1 {
+		return ns[0]
 	}
 
-	return b
+	min := ns[0]
+
+	for i := 1; i < len(ns); i++ {
+		if ns[i] < min {
+			min = ns[i]
+		}
+	}
+
+	return min
 }
 
-func Max(a, b int) int {
-	if a > b {
-		return a
+// Returns the largest number.
+func Max(ns ...int) int {
+	if len(ns) == 1 {
+		return ns[0]
 	}
 
-	return b
+	max := ns[0]
+
+	for i := 1; i < len(ns); i++ {
+		if ns[i] > max {
+			max = ns[i]
+		}
+	}
+
+	return max
 }

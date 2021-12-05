@@ -203,12 +203,14 @@ func (m Matrix) Dagger() Matrix {
 	return n
 }
 
+// Checks if given matrix is square.
 func (m Matrix) IsSquare() bool {
 	r, c := m.Dims()
 
 	return r == c
 }
 
+// Checks if given matrix is unitary.
 func (m Matrix) IsUnitary() bool {
 	if !m.IsSquare() {
 		return false
@@ -220,7 +222,9 @@ func (m Matrix) IsUnitary() bool {
 	return Mul(m, m.Dagger()).Equals(id)
 }
 
-func (m Matrix) IsPureGate() bool {
+// Generalized Permutation Matrix are permutation matrices with scalar multiplication.
+// It maps basis to basis, allowing us trivial parallelization when applying to vector.
+func (m Matrix) IsGenPermutMatrix() bool {
 	for _, row := range m {
 		zerocnt := 0
 		for _, v := range row {

@@ -26,15 +26,6 @@ func TestGCD(t *testing.T) {
 	}
 }
 
-func TestLog2(t *testing.T) {
-	n := 324234234
-	len := len(fmt.Sprintf("%b", n)) - 1
-
-	if len != numbers.Log2(n) {
-		t.Fail()
-	}
-}
-
 func BenchmarkPowMod(t *testing.B) {
 	a := rand.Intn(1 << 20)
 	b := rand.Intn(1 << 20)

@@ -79,16 +79,17 @@ func shorInstance(N int, verbose bool) int {
 
 	// Again, Classical Part.
 	Q := 1 << (2 * n)
-	yQ := fraction.New(y, Q)
+	approxes := fraction.New(y, Q).FractionalApprox()
 
 	r := 0
 	found_r := false
 
-	for i := 1; i <= len(yQ.ContinuedFraction()); i++ {
-		ds := yQ.FractionalApprox(i)
-		r = ds.D
+	// Try from reverse
+	for i := len(approxes) - 1; i >= 0; i-- {
+		r = approxes[i].D
 
-		if r == 1 {
+		// r should be smaller than N.
+		if r > N {
 			continue
 		}
 
@@ -96,7 +97,7 @@ func shorInstance(N int, verbose bool) int {
 			fmt.Printf("[*] Trying with r: %d...\n", r)
 		}
 
-		if r > N {
+		if r == 1 {
 			break
 		}
 

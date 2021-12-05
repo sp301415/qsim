@@ -26,7 +26,12 @@ type Circuit struct {
 	temp  vector.Vector
 }
 
+// Generates new circuit with n qbits. Initializes with |0...0>.
 func NewCircuit(n int) Circuit {
+	if n < 1 {
+		panic("Invalid qbit length.")
+	}
+
 	ZEROVEC = vector.Zeros(1 << n)
 
 	q := qbit.Zeros(n)
@@ -35,6 +40,7 @@ func NewCircuit(n int) Circuit {
 	return Circuit{N: n, State: q, temp: temp}
 }
 
+// Sets state to q.
 func (circ *Circuit) InitQbit(q vector.Vector) {
 	if q.Dim() != (1 << circ.N) {
 		panic("Invalid qbit length.")
@@ -42,6 +48,7 @@ func (circ *Circuit) InitQbit(q vector.Vector) {
 	circ.State = q
 }
 
+// Sets state to |n>.
 func (circ *Circuit) InitCbit(n int) {
 	if numbers.BitLength(n) > circ.N {
 		panic("Invalid cbit length.")
@@ -50,6 +57,7 @@ func (circ *Circuit) InitCbit(n int) {
 	circ.State = qbit.NewFromCbit(n, circ.N)
 }
 
+// Applies the oracle f to circuit. Maps |x>_{iregs}|y>_{oregs} -> |x>_{iregs}|y^f(x)>_{oregs}.
 // NOTE: This function DOES NOT check if oracle is unitary. Use at your own risk.
 func (circ *Circuit) ApplyOracle(oracle func(int) int, iregs []int, oregs []int) {
 	if len(iregs) == 0 || len(oregs) == 0 {
@@ -94,6 +102,7 @@ func (circ *Circuit) ApplyOracle(oracle func(int) int, iregs []int, oregs []int)
 	copy(circ.State, circ.temp)
 }
 
+// Applies the operator to iregs.
 func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 	if !operator.IsUnitary() {
 		panic("Operator must be unitary.")
@@ -104,25 +113,23 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 	}
 
 	// Special case
-	// If operator is pure => trivial parallelization is possible.
-	// If operator is not pure, but still single qbit
+	// If operator is generalized permutation matrix => trivial parallelization is possible.
+	// If operator is not generalized permutation matrix, but still single qbit
 	// => Actually, almost every gate is single qbit. This case, we can still parallelize somehow.
-	if circ.N > 1 {
-		if operator.IsPureGate() {
-			circ.applyPure(operator, iregs...)
-			return
-		}
+	if operator.IsGenPermutMatrix() {
+		circ.applyGenPermut(operator, iregs...)
+		return
+	}
 
-		if len(iregs) == 1 {
-			circ.applySingle(operator, iregs[0])
-			return
-		}
+	if len(iregs) == 1 {
+		circ.applySingle(operator, iregs[0])
+		return
 	}
 
 	// Generic Fallback.
 
 	// Tensor Product takes too long, we need another method.
-	// Idea: decompose state vector to pure states?
+	// Idea: decompose state vector to basis states?
 	copy(circ.temp, ZEROVEC)
 
 	for basis, amp := range circ.State {
@@ -159,9 +166,11 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 	copy(circ.State, circ.temp)
 }
 
+// Special case of apply, when operator is a single-qbit gate.
+// This case, we use parallelization for 2^(n-1) loops.
 func (circ *Circuit) applySingle(operator matrix.Matrix, ireg int) {
 	// checks for operator is already done in Apply()
-	// Note that operator is assumed to be non-pure.
+	// Note that operator is assumed to be non-generalized permutation matrix.
 
 	wg := &sync.WaitGroup{}
 
@@ -203,8 +212,10 @@ func (circ *Circuit) applySingle(operator matrix.Matrix, ireg int) {
 	copy(circ.State, circ.temp)
 }
 
-func (circ *Circuit) applyPure(operator matrix.Matrix, iregs ...int) {
-	// Pure operators are trivially parallelizable.
+// Special case of apply, when operator is generalized permutation matrix.
+// This case, trivial parallelization is possible.
+func (circ *Circuit) applyGenPermut(operator matrix.Matrix, iregs ...int) {
+	// Generalized permutation matrix operators are trivially parallelizable.
 
 	// Precomputate maps.
 	memo_basis := make([]int, 1<<len(iregs))
@@ -259,26 +270,47 @@ func (circ *Circuit) applyPure(operator matrix.Matrix, iregs ...int) {
 	copy(circ.State, circ.temp)
 }
 
-func (circ *Circuit) I(n int) {
+// Applies the I gate to ireg.
+func (circ *Circuit) I(ireg int) {
 	// Just Do Nothing. lol.
 }
 
-func (circ *Circuit) X(n int) {
-	circ.Apply(gate.X(), n)
+// Applies the X gate to ireg.
+func (circ *Circuit) X(ireg int) {
+	circ.Apply(gate.X(), ireg)
 }
 
-func (circ *Circuit) Y(n int) {
-	circ.Apply(gate.Y(), n)
+// Applies the Y gate to ireg.
+func (circ *Circuit) Y(ireg int) {
+	circ.Apply(gate.Y(), ireg)
 }
 
-func (circ *Circuit) Z(n int) {
-	circ.Apply(gate.Z(), n)
+// Applies the Z gate to ireg.
+func (circ *Circuit) Z(ireg int) {
+	circ.Apply(gate.Z(), ireg)
 }
 
-func (circ *Circuit) H(n int) {
-	circ.Apply(gate.H(), n)
+// Applies the H gate to ireg.
+func (circ *Circuit) H(ireg int) {
+	circ.Apply(gate.H(), ireg)
 }
 
+// Applies the P gate to ireg.
+func (circ *Circuit) P(phi float64, ireg int) {
+	circ.Apply(gate.P(phi), ireg)
+}
+
+// Applies the S gate to ireg.
+func (circ *Circuit) S(ireg int) {
+	circ.Apply(gate.S(), ireg)
+}
+
+// Applies the T gate to ireg.
+func (circ *Circuit) T(ireg int) {
+	circ.Apply(gate.T(), ireg)
+}
+
+// Applies the control-version of operator to circuit. cs is the control qbits, xs is the input qbits.
 func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 	if !operator.IsUnitary() {
 		panic("Operator must be unitary.")
@@ -288,16 +320,14 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 		panic("Operator size does not match with input qbits.")
 	}
 
-	if circ.N > 1 {
-		if operator.IsPureGate() {
-			circ.controlPure(operator, cs, xs)
-			return
-		}
+	if operator.IsGenPermutMatrix() {
+		circ.controlGenPermut(operator, cs, xs)
+		return
+	}
 
-		if len(xs) == 1 {
-			circ.controlSingle(operator, cs, xs[0])
-			return
-		}
+	if len(xs) == 1 {
+		circ.controlSingle(operator, cs, xs[0])
+		return
 	}
 
 	// Generic Fallback.
@@ -340,6 +370,8 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 	copy(circ.State, circ.temp)
 }
 
+// Special case of control-operator, when the operator is single qbit.
+// Similar to applySingle.
 func (circ *Circuit) controlSingle(operator matrix.Matrix, cs []int, x int) {
 	wg := &sync.WaitGroup{}
 
@@ -387,7 +419,9 @@ func (circ *Circuit) controlSingle(operator matrix.Matrix, cs []int, x int) {
 	copy(circ.State, circ.temp)
 }
 
-func (circ *Circuit) controlPure(operator matrix.Matrix, cs []int, xs []int) {
+// Special case of control-operator, when the operator is generalized permutation matrix.
+// Similar to applyGenPermut.
+func (circ *Circuit) controlGenPermut(operator matrix.Matrix, cs []int, xs []int) {
 	// Precomputate maps.
 	memo_basis := make([]int, 1<<len(xs))
 	memo_amp := make([]complex128, 1<<len(xs))
@@ -451,18 +485,22 @@ func (circ *Circuit) controlPure(operator matrix.Matrix, cs []int, xs []int) {
 	copy(circ.State, circ.temp)
 }
 
+// Alias for Control() when control qbit and input qbit are all single.
 func (circ *Circuit) controlSingleSingle(operator matrix.Matrix, c int, x int) {
 	circ.Control(operator, []int{c}, []int{x})
 }
 
+// Applies Control-X gate to circuit. c is control qbit, and x is input qbit.
 func (circ *Circuit) CX(c int, x int) {
 	circ.controlSingleSingle(gate.X(), c, x)
 }
 
+// Applies Tofolli gate(CCX gate) to circuit. c1, c2 are control qbits, and x is input qbit.
 func (circ *Circuit) CCX(c1, c2, x int) {
 	circ.controlSingle(gate.X(), []int{c1, c2}, x)
 }
 
+// Swaps two qbits.
 func (circ *Circuit) Swap(x int, y int) {
 	chunksize := 1 << (circ.N / 2)
 	wg := &sync.WaitGroup{}
@@ -497,7 +535,7 @@ func (circ *Circuit) Swap(x int, y int) {
 	copy(circ.State, circ.temp)
 }
 
-// QFT from [start, end)
+// Applies QFT to [start, end).
 func (circ *Circuit) QFT(start, end int) {
 	if start < 0 || end > circ.N {
 		panic("Index out of range.")
@@ -527,6 +565,7 @@ func (circ *Circuit) QFT(start, end int) {
 
 }
 
+// Applies Inverse QFT to [start, end).
 func (circ *Circuit) InvQFT(start, end int) {
 	if start < 0 || end > circ.N {
 		panic("Index out of range.")
@@ -554,6 +593,7 @@ func (circ *Circuit) InvQFT(start, end int) {
 	}
 }
 
+// Measure qbits.
 func (circ *Circuit) Measure(qbits ...int) int {
 	qbits = sort.IntSlice(qbits)
 
@@ -614,11 +654,12 @@ func (circ *Circuit) Measure(qbits ...int) int {
 	return output
 }
 
+// Prints current state to string.
 func (circ Circuit) StateToString() string {
 	q := circ.State
 
 	qs := make([]string, 0)
-	d := numbers.Log2(q.Dim())
+	d := numbers.BitLength(q.Dim()) - 1
 
 	for i, v := range q {
 		if v == 0 {
