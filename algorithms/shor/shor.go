@@ -82,50 +82,34 @@ func shorInstance(N int, verbose bool) int {
 	approxes := fraction.New(y, Q).FractionalApprox()
 
 	r := 0
-	found_r := false
-
 	// Try from reverse
 	for i := len(approxes) - 1; i >= 0; i-- {
 		r = approxes[i].D
 
 		// r should be smaller than N.
-		if r > N {
-			continue
-		}
-
-		if verbose {
-			fmt.Printf("[*] Trying with r: %d...\n", r)
-		}
-
-		if r == 1 {
+		if r < N {
 			break
 		}
-
-		if numbers.PowMod(a, r, N) == 1 {
-			found_r = true
-			break
-		}
-	}
-
-	if !found_r {
-		if verbose {
-			fmt.Println("[!] Failed to find r on this try :(")
-		}
-		return 0
-	}
-
-	if r%2 != 0 || numbers.PowMod(a, r/2, N) == N-1 {
-		if verbose {
-			fmt.Println("[!] Failed to find factor on this try :(")
-		}
-		return 0
 	}
 
 	if verbose {
-		fmt.Printf("[+] Found r: %d\n", r)
+		fmt.Printf("[*] Trying with r: %d...\n", r)
 	}
 
-	return numbers.GCD(N, numbers.PowMod(a, r/2, N)-1)
+	factor := 0
+	for v := -1; v <= 1; v += 2 {
+		factor = numbers.GCD(numbers.PowMod(a, r/2, N)+v, N)
+
+		if verbose {
+			fmt.Printf("[*] Guessed factor: %d...\n", factor)
+		}
+
+		if factor != 1 && factor != N && N%factor == 0 {
+			return factor
+		}
+	}
+
+	return 0
 }
 
 func Shor(N int) int {
