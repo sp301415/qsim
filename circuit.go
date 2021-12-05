@@ -32,6 +32,10 @@ func NewCircuit(n int) Circuit {
 		panic("Invalid qbit length.")
 	}
 
+	if n > 63 {
+		panic("This simulator currently supports up to 63 qbits.")
+	}
+
 	ZEROVEC = vector.Zeros(1 << n)
 
 	q := qbit.Zeros(n)
@@ -229,15 +233,23 @@ func (circ *Circuit) applyGenPermut(operator matrix.Matrix, iregs ...int) {
 	memo_basis := make([]int, 1<<len(iregs))
 	memo_amp := make([]complex128, 1<<len(iregs))
 
-	for i, row := range operator {
-		for j := range row {
-			if operator[j][i] != 0 {
-				memo_basis[i] = j
-				memo_amp[i] = operator[j][i]
-				break
+	wg_memo := &sync.WaitGroup{}
+
+	for i := 0; i < len(operator); i++ {
+		wg_memo.Add(1)
+		go func(col int) {
+			defer wg_memo.Done()
+
+			for j := 0; j < len(operator); j++ {
+				if operator[col][j] != 0 {
+					memo_basis[col] = j
+					memo_amp[col] = operator[j][col]
+				}
 			}
-		}
+		}(i)
 	}
+
+	wg_memo.Wait()
 
 	wg := &sync.WaitGroup{}
 	chunksize := 1 << (circ.N / 2)
@@ -438,15 +450,23 @@ func (circ *Circuit) controlGenPermut(operator matrix.Matrix, cs []int, xs []int
 	memo_basis := make([]int, 1<<len(xs))
 	memo_amp := make([]complex128, 1<<len(xs))
 
-	for i, row := range operator {
-		for j := range row {
-			if operator[j][i] != 0 {
-				memo_basis[i] = j
-				memo_amp[i] = operator[j][i]
-				break
+	wg_memo := &sync.WaitGroup{}
+
+	for i := 0; i < len(operator); i++ {
+		wg_memo.Add(1)
+		go func(col int) {
+			defer wg_memo.Done()
+
+			for j := 0; j < len(operator); j++ {
+				if operator[col][j] != 0 {
+					memo_basis[col] = j
+					memo_amp[col] = operator[j][col]
+				}
 			}
-		}
+		}(i)
 	}
+
+	wg_memo.Wait()
 
 	wg := &sync.WaitGroup{}
 	chunksize := (1 << (circ.N / 2))
@@ -509,7 +529,7 @@ func (circ *Circuit) CX(c int, x int) {
 
 // Applies Tofolli gate(CCX gate) to circuit. c1, c2 are control qbits, and x is input qbit.
 func (circ *Circuit) CCX(c1, c2, x int) {
-	circ.controlSingle(gate.X(), []int{c1, c2}, x)
+	circ.Control(gate.X(), []int{c1, c2}, []int{x})
 }
 
 // Swaps two qbits.
