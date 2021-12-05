@@ -26,19 +26,26 @@ func TestGCD(t *testing.T) {
 	}
 }
 
-func BenchmarkPowMod(t *testing.B) {
-	a := rand.Intn(1 << 20)
-	b := rand.Intn(1 << 20)
-	c := rand.Intn(1 << 20)
-
-	numbers.PowMod(a, b, c)
-}
-
 func TestBinLen(t *testing.T) {
 	n := 1545
 	l := len(fmt.Sprintf("%b", n))
 
 	if l != numbers.BitLength(n) {
+		t.Fail()
+	}
+}
+
+func TestMinMax(t *testing.T) {
+	N := 100
+	data := make([]int, N)
+
+	for i := range data {
+		data[i] = i
+	}
+
+	rand.Shuffle(N, func(i, j int) { data[i], data[j] = data[j], data[i] })
+
+	if numbers.Min(data...) != 0 || numbers.Max(data...) != N-1 {
 		t.Fail()
 	}
 }

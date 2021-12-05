@@ -19,7 +19,7 @@ func TestContinuedFraction(t *testing.T) {
 	}
 }
 
-func TestApprox(t *testing.T) {
+func TestFractionalApprox(t *testing.T) {
 	f := fraction.New(84375, 100000)
 	approx := f.FractionalApprox()
 	if approx[len(approx)-1] != fraction.New(27, 32) {

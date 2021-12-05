@@ -64,6 +64,10 @@ func (circ *Circuit) ApplyOracle(oracle func(int) int, iregs []int, oregs []int)
 		panic("Invalid input/output registers.")
 	}
 
+	if numbers.Min(iregs...) < 0 || numbers.Max(iregs...) >= circ.N {
+		panic("Register index out of range.")
+	}
+
 	wg := &sync.WaitGroup{}
 	chunksize := 1 << (circ.N / 2)
 	copy(circ.temp, ZEROVEC)
@@ -110,6 +114,10 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 
 	if len(operator) != 1<<len(iregs) {
 		panic("Operator size does not match with input qbits.")
+	}
+
+	if numbers.Min(iregs...) < 0 || numbers.Max(iregs...) >= circ.N {
+		panic("Register index out of range.")
 	}
 
 	// Special case
@@ -320,6 +328,10 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 		panic("Operator size does not match with input qbits.")
 	}
 
+	if numbers.Min(cs...) < 0 || numbers.Max(cs...) >= circ.N || numbers.Min(xs...) < 0 || numbers.Max(xs...) >= circ.N {
+		panic("Register index out of range.")
+	}
+
 	if operator.IsGenPermutMatrix() {
 		circ.controlGenPermut(operator, cs, xs)
 		return
@@ -502,6 +514,9 @@ func (circ *Circuit) CCX(c1, c2, x int) {
 
 // Swaps two qbits.
 func (circ *Circuit) Swap(x int, y int) {
+	if x < 0 || x >= circ.N || y < 0 || y >= circ.N {
+		panic("Register index out of range.")
+	}
 	chunksize := 1 << (circ.N / 2)
 	wg := &sync.WaitGroup{}
 	copy(circ.temp, ZEROVEC)
@@ -598,7 +613,7 @@ func (circ *Circuit) Measure(qbits ...int) int {
 	qbits = sort.IntSlice(qbits)
 
 	if qbits[0] < 0 || qbits[len(qbits)-1] > circ.N-1 {
-		panic("Invalid registers.")
+		panic("Register index out of range.")
 	}
 
 	prob := make([]float64, 1<<len(qbits))
