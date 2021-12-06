@@ -287,7 +287,22 @@ func TestMeasure(t *testing.T) {
 func BenchmarkApplywithOptimization(t *testing.B) {
 	// Hadamard gate for every qbit.
 
-	N := 8
+	N := 6
+	c := qsim.NewCircuit(N)
+
+	for i := 0; i < N; i++ {
+		c.H(i)
+	}
+
+	for i := N - 1; i >= 0; i-- {
+		c.H(i)
+	}
+}
+
+func BenchmarkApplywithOptimizationP(t *testing.B) {
+	// Hadamard gate for every qbit.
+
+	N := 12
 	c := qsim.NewCircuit(N)
 
 	for i := 0; i < N; i++ {
@@ -303,7 +318,7 @@ func BenchmarkApplywithoutOptimization(t *testing.B) {
 	// Hadamard gate for every qbit.
 	// But with Tensor Product.
 
-	N := 8
+	N := 6
 	c := qsim.NewCircuit(N)
 	Hs := gate.H()
 	regs := make([]int, N)
@@ -318,4 +333,16 @@ func BenchmarkApplywithoutOptimization(t *testing.B) {
 
 	c.Apply(Hs, regs...)
 	c.Apply(Hs, regs...)
+}
+func BenchmarkMeasurement(t *testing.B) {
+	N := 20
+
+	c := qsim.NewCircuit(N)
+	iregs := make([]int, N)
+
+	for i := range iregs {
+		iregs[i] = i
+		c.H(i)
+	}
+	c.Measure(iregs...)
 }

@@ -16,6 +16,8 @@ import (
 	"github.com/sp301415/qsim/quantum/qbit"
 )
 
+const PARALLEL_THRESHOLD int = 10
+
 type Circuit struct {
 	// Why save gates when we don't need diagram? :)
 	N     int
@@ -76,6 +78,11 @@ func (circ *Circuit) ApplyOracle(oracle func(int) int, iregs []int, oregs []int)
 		panic("Register index out of range.")
 	}
 
+	if circ.N <= PARALLEL_THRESHOLD {
+		circ.applyOracleFallback(oracle, iregs, oregs)
+		return
+	}
+
 	wg := &sync.WaitGroup{}
 	chunksize := 1 << (circ.N / 2)
 	circ.cleartemp()
@@ -104,12 +111,40 @@ func (circ *Circuit) ApplyOracle(oracle func(int) int, iregs []int, oregs []int)
 					newbasis ^= bit << val
 				}
 
-				circ.temp[newbasis] += amp
+				circ.temp[newbasis] = amp
 			}
 		}(i)
 	}
 
 	wg.Wait()
+
+	copy(circ.State, circ.temp)
+}
+
+// Fallback of ApplyOracle(). No optimization.
+func (circ *Circuit) applyOracleFallback(oracle func(int) int, iregs []int, oregs []int) {
+	circ.cleartemp()
+
+	for basis, amp := range circ.State {
+		if amp == 0 {
+			continue
+		}
+
+		input := 0
+		for idx, val := range iregs {
+			input += ((basis >> val) & 1) << idx
+		}
+
+		output := oracle(input)
+
+		newbasis := basis
+		for idx, val := range oregs {
+			bit := (output >> idx) & 1
+			newbasis ^= bit << val
+		}
+
+		circ.temp[newbasis] = amp
+	}
 
 	copy(circ.State, circ.temp)
 }
@@ -128,14 +163,26 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 		panic("Register index out of range.")
 	}
 
-	if len(iregs) == 1 {
-		circ.applyOneQbit(operator, iregs[0])
-		return
-	}
+	if circ.N > PARALLEL_THRESHOLD {
+		if len(iregs) == 1 {
+			circ.applyOneQbit(operator, iregs[0])
+			return
+		}
 
-	if len(iregs) == 2 {
-		circ.applyTwoQbit(operator, iregs[0], iregs[1])
-		return
+		if len(iregs) == 2 {
+			circ.applyTwoQbit(operator, iregs[0], iregs[1])
+			return
+		}
+	} else {
+		if len(iregs) == 1 {
+			circ.applyOneQbitFallback(operator, iregs[0])
+			return
+		}
+
+		if len(iregs) == 2 {
+			circ.applyTwoQbitFallback(operator, iregs[0], iregs[1])
+			return
+		}
 	}
 
 	// Generic Fallback.
@@ -145,12 +192,6 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 // Special case of Apply(), when there is only one input registers.
 // Implemented as in-place swapping.
 func (circ *Circuit) applyOneQbit(operator matrix.Matrix, ireg int) {
-	if circ.N == 1 {
-		// No need for further optimization, it is fast enough.
-		circ.State = circ.State.Apply(operator)
-		return
-	}
-
 	wg := &sync.WaitGroup{}
 	chunksize := 1 << ((circ.N - 1) / 2)
 
@@ -160,7 +201,7 @@ func (circ *Circuit) applyOneQbit(operator matrix.Matrix, ireg int) {
 			defer wg.Done()
 
 			for n := start; n < start+chunksize; n++ {
-				n0 := ((n >> ireg) << (ireg + 1)) + (n % (1 << ireg))
+				n0 := ((n >> ireg) << (ireg + 1)) + (n & ((1 << ireg) - 1))
 				n1 := n0 | (1 << ireg)
 
 				amp0 := circ.State[n0]
@@ -173,6 +214,20 @@ func (circ *Circuit) applyOneQbit(operator matrix.Matrix, ireg int) {
 	}
 
 	wg.Wait()
+}
+
+// applyOneQbit() with no parallelization.
+func (circ *Circuit) applyOneQbitFallback(operator matrix.Matrix, ireg int) {
+	for n := 0; n < (len(circ.State) >> 1); n++ {
+		n0 := ((n >> ireg) << (ireg + 1)) + (n & ((1 << ireg) - 1))
+		n1 := n0 | (1 << ireg)
+
+		amp0 := circ.State[n0]
+		amp1 := circ.State[n1]
+
+		circ.State[n0] = amp0*operator[0][0] + amp1*operator[0][1]
+		circ.State[n1] = amp0*operator[1][0] + amp1*operator[1][1]
+	}
 }
 
 // Special case of Apply(), when there are two input registers.
@@ -197,12 +252,12 @@ func (circ *Circuit) applyTwoQbit(operator matrix.Matrix, ireg0, ireg1 int) {
 			defer wg.Done()
 
 			for n := start; n < start+chunksize; n++ {
-				n0 := ((n >> ireg0) << (ireg0 + 1)) + (n % (1 << ireg0))
+				n0 := ((n >> ireg0) << (ireg0 + 1)) + (n & ((1 << ireg0) - 1))
 				n1 := n0 | (1 << ireg0)
 
-				n00 := ((n0 >> ireg1) << (ireg1 + 1)) + (n0 % (1 << ireg1))
+				n00 := ((n0 >> ireg1) << (ireg1 + 1)) + (n0 & ((1 << ireg1) - 1))
 				n01 := n00 | (1 << ireg1)
-				n10 := ((n1 >> ireg1) << (ireg1 + 1)) + (n1 % (1 << ireg1))
+				n10 := ((n1 >> ireg1) << (ireg1 + 1)) + (n1 & ((1 << ireg1) - 1))
 				n11 := n10 | (1 << ireg1)
 
 				amp00 := circ.State[n00]
@@ -219,6 +274,29 @@ func (circ *Circuit) applyTwoQbit(operator matrix.Matrix, ireg0, ireg1 int) {
 	}
 
 	wg.Wait()
+}
+
+// applyTwoQbit() with no parallelization.
+func (circ *Circuit) applyTwoQbitFallback(operator matrix.Matrix, ireg0, ireg1 int) {
+	for n := 0; n < (len(circ.State) >> 2); n++ {
+		n0 := ((n >> ireg0) << (ireg0 + 1)) + (n & ((1 << ireg0) - 1))
+		n1 := n0 | (1 << ireg0)
+
+		n00 := ((n0 >> ireg1) << (ireg1 + 1)) + (n0 & ((1 << ireg1) - 1))
+		n01 := n00 | (1 << ireg1)
+		n10 := ((n1 >> ireg1) << (ireg1 + 1)) + (n1 & ((1 << ireg1) - 1))
+		n11 := n10 | (1 << ireg1)
+
+		amp00 := circ.State[n00]
+		amp01 := circ.State[n01]
+		amp10 := circ.State[n10]
+		amp11 := circ.State[n11]
+
+		circ.State[n00] = amp00*operator[0][0] + amp01*operator[0][1] + amp10*operator[0][2] + amp11*operator[0][1]
+		circ.State[n01] = amp00*operator[1][0] + amp01*operator[1][1] + amp10*operator[1][2] + amp11*operator[1][1]
+		circ.State[n10] = amp00*operator[2][0] + amp01*operator[2][1] + amp10*operator[2][2] + amp11*operator[2][1]
+		circ.State[n11] = amp00*operator[3][0] + amp01*operator[3][1] + amp10*operator[3][2] + amp11*operator[3][1]
+	}
 }
 
 // General Fallback for Apply(). No optimization.
@@ -328,14 +406,26 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 		panic("Too many registers.")
 	}
 
-	if len(xs) == 1 {
-		circ.controlOneQbit(operator, cs, xs[0])
-		return
-	}
+	if circ.N > PARALLEL_THRESHOLD {
+		if len(xs) == 1 {
+			circ.controlOneQbit(operator, cs, xs[0])
+			return
+		}
 
-	if len(xs) == 2 {
-		circ.controlTwoQubit(operator, cs, xs[0], xs[1])
-		return
+		if len(xs) == 2 {
+			circ.controlTwoQubit(operator, cs, xs[0], xs[1])
+			return
+		}
+	} else {
+		if len(xs) == 1 {
+			circ.controlOneQbitFallback(operator, cs, xs[0])
+			return
+		}
+
+		if len(xs) == 2 {
+			circ.controlTwoQbitFallback(operator, cs, xs[0], xs[1])
+			return
+		}
 	}
 
 	// Generic Fallback.
@@ -367,7 +457,7 @@ func (circ *Circuit) controlOneQbit(operator matrix.Matrix, cs []int, ireg int) 
 					continue
 				}
 
-				n0 := ((n >> ireg) << (ireg + 1)) + (n % (1 << ireg))
+				n0 := ((n >> ireg) << (ireg + 1)) + (n & ((1 << ireg) - 1))
 				n1 := n0 | (1 << ireg)
 
 				amp0 := circ.State[n0]
@@ -380,6 +470,34 @@ func (circ *Circuit) controlOneQbit(operator matrix.Matrix, cs []int, ireg int) 
 	}
 
 	wg.Wait()
+}
+
+// Fallback of controlOneQbit(), with no parallelization.
+func (circ *Circuit) controlOneQbitFallback(operator matrix.Matrix, cs []int, ireg int) {
+	cs_shifted := make([]int, len(cs))
+
+	for i := range cs_shifted {
+		cs_shifted[i] = cs[i]
+		if cs[i] > ireg {
+			cs_shifted[i]--
+		}
+	}
+
+	for n := 0; n < (len(circ.State) >> 1); n++ {
+		if !checkControlBit(n, cs_shifted) {
+			continue
+		}
+
+		n0 := ((n >> ireg) << (ireg + 1)) + (n & ((1 << ireg) - 1))
+		n1 := n0 | (1 << ireg)
+
+		amp0 := circ.State[n0]
+		amp1 := circ.State[n1]
+
+		circ.State[n0] = amp0*operator[0][0] + amp1*operator[0][1]
+		circ.State[n1] = amp0*operator[1][0] + amp1*operator[1][1]
+	}
+
 }
 
 // Special case of Control(), when there are two input registers.
@@ -414,12 +532,12 @@ func (circ *Circuit) controlTwoQubit(operator matrix.Matrix, cs []int, ireg0, ir
 					continue
 				}
 
-				n0 := ((n >> ireg0) << (ireg0 + 1)) + (n % (1 << ireg0))
+				n0 := ((n >> ireg0) << (ireg0 + 1)) + (n & ((1 << ireg0) - 1))
 				n1 := n0 | (1 << ireg0)
 
-				n00 := ((n0 >> ireg1) << (ireg1 + 1)) + (n0 % (1 << ireg1))
+				n00 := ((n0 >> ireg1) << (ireg1 + 1)) + (n0 & ((1 << ireg1) - 1))
 				n01 := n00 | (1 << ireg1)
-				n10 := ((n1 >> ireg1) << (ireg1 + 1)) + (n1 % (1 << ireg1))
+				n10 := ((n1 >> ireg1) << (ireg1 + 1)) + (n1 & ((1 << ireg1) - 1))
 				n11 := n10 | (1 << ireg1)
 
 				amp00 := circ.State[n00]
@@ -436,6 +554,49 @@ func (circ *Circuit) controlTwoQubit(operator matrix.Matrix, cs []int, ireg0, ir
 	}
 
 	wg.Wait()
+}
+
+// Fallback of controlTwoQbit(), with no parallelization.
+func (circ *Circuit) controlTwoQbitFallback(operator matrix.Matrix, cs []int, ireg0, ireg1 int) {
+	if ireg0 == ireg1 {
+		panic("Same input registers.")
+	}
+
+	cs_shifted := make([]int, len(cs))
+
+	for i := range cs_shifted {
+		cs_shifted[i] = cs[i]
+		if cs[i] > ireg0 {
+			cs_shifted[i]--
+		}
+		if cs[i] > ireg1 {
+			cs_shifted[i]--
+		}
+	}
+
+	for n := 0; n < (len(circ.State) >> 2); n++ {
+		if !checkControlBit(n, cs_shifted) {
+			continue
+		}
+
+		n0 := ((n >> ireg0) << (ireg0 + 1)) + (n & ((1 << ireg0) - 1))
+		n1 := n0 | (1 << ireg0)
+
+		n00 := ((n0 >> ireg1) << (ireg1 + 1)) + (n0 & ((1 << ireg1) - 1))
+		n01 := n00 | (1 << ireg1)
+		n10 := ((n1 >> ireg1) << (ireg1 + 1)) + (n1 & ((1 << ireg1) - 1))
+		n11 := n10 | (1 << ireg1)
+
+		amp00 := circ.State[n00]
+		amp01 := circ.State[n01]
+		amp10 := circ.State[n10]
+		amp11 := circ.State[n11]
+
+		circ.State[n00] = amp00*operator[0][0] + amp01*operator[0][1] + amp10*operator[0][2] + amp11*operator[0][1]
+		circ.State[n01] = amp00*operator[1][0] + amp01*operator[1][1] + amp10*operator[1][2] + amp11*operator[1][1]
+		circ.State[n10] = amp00*operator[2][0] + amp01*operator[2][1] + amp10*operator[2][2] + amp11*operator[2][1]
+		circ.State[n11] = amp00*operator[3][0] + amp01*operator[3][1] + amp10*operator[3][2] + amp11*operator[3][1]
+	}
 }
 
 // General Fallback for Control(). Similar to applyFallback(), No optimization.
@@ -503,6 +664,11 @@ func (circ *Circuit) Swap(x int, y int) {
 		return
 	}
 
+	if circ.N <= PARALLEL_THRESHOLD {
+		circ.swapFallback(x, y)
+		return
+	}
+
 	chunksize := 1 << ((circ.N - 2) / 2)
 	wg := &sync.WaitGroup{}
 
@@ -512,11 +678,11 @@ func (circ *Circuit) Swap(x int, y int) {
 			defer wg.Done()
 
 			for n := start; n < start+chunksize; n++ {
-				n0 := ((n >> x) << (x + 1)) + (n % (1 << x))
+				n0 := ((n >> x) << (x + 1)) + (n & ((1 << x) - 1))
 				n1 := n0 | (1 << x)
 
-				n01 := ((n0 >> y) << (y + 1)) + (n0 % (1 << y)) + (1 << y)
-				n10 := ((n1 >> y) << (y + 1)) + (n1 % (1 << y))
+				n01 := ((n0 >> y) << (y + 1)) + (n0 & ((1 << y) - 1)) + (1 << y)
+				n10 := ((n1 >> y) << (y + 1)) + (n1 & ((1 << y) - 1))
 
 				circ.State[n01], circ.State[n10] = circ.State[n10], circ.State[n01]
 			}
@@ -524,6 +690,19 @@ func (circ *Circuit) Swap(x int, y int) {
 	}
 
 	wg.Wait()
+}
+
+// SWAP without goroutine.
+func (circ *Circuit) swapFallback(x, y int) {
+	for n := 0; n < (len(circ.State) >> 2); n++ {
+		n0 := ((n >> x) << (x + 1)) + (n & ((1 << x) - 1))
+		n1 := n0 | (1 << x)
+
+		n01 := ((n0 >> y) << (y + 1)) + (n0 & ((1 << y) - 1)) + (1 << y)
+		n10 := ((n1 >> y) << (y + 1)) + (n1 & ((1 << y) - 1))
+
+		circ.State[n01], circ.State[n10] = circ.State[n10], circ.State[n01]
+	}
 }
 
 // Applies QFT to [start, end).
@@ -618,7 +797,8 @@ func (circ *Circuit) Measure(qbits ...int) int {
 		}
 	}
 
-	a := 0.0
+	s := complex(math.Sqrt(1-probs[output]), 0)
+
 	for n, amp := range circ.State {
 		if amp == 0 {
 			continue
@@ -626,31 +806,13 @@ func (circ *Circuit) Measure(qbits ...int) int {
 
 		for i, q := range qbits {
 			if (n>>q)&1 != (output>>i)&1 {
-				a += real(amp)*real(amp) + imag(amp)*imag(amp)
 				circ.State[n] = 0
-				break
+				goto endloop
 			}
 		}
+		circ.State[n] /= s
+	endloop:
 	}
-	s := complex(math.Sqrt(1-a), 0)
-
-	wg := &sync.WaitGroup{}
-	chunksize := 1 << (circ.N / 2)
-
-	for i := 0; i < len(circ.State); i += chunksize {
-		wg.Add(1)
-		go func(start int) {
-			defer wg.Done()
-
-			for n := start; n < start+chunksize; n++ {
-				if circ.State[n] != 0 {
-					circ.State[n] /= s
-				}
-			}
-		}(i)
-	}
-
-	wg.Wait()
 
 	return output
 }

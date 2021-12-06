@@ -37,11 +37,7 @@ func DeutchJozsa(n int, oracle func(int) int) bool {
 	}
 
 	// Apply Oracle!
-	// fmt.Println(q.StateToString())
-
 	q.ApplyOracle(oracle, iregs, []int{0})
-
-	// fmt.Println(q.StateToString())
 
 	// Hadamard, then Measure
 	for _, v := range iregs {
