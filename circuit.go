@@ -4,7 +4,6 @@ package qsim
 import (
 	"fmt"
 	"math"
-	"math/cmplx"
 	"math/rand"
 	"sort"
 	"strings"
@@ -16,8 +15,6 @@ import (
 	"github.com/sp301415/qsim/quantum/gate"
 	"github.com/sp301415/qsim/quantum/qbit"
 )
-
-var ZEROVEC vector.Vector
 
 type Circuit struct {
 	// Why save gates when we don't need diagram? :)
@@ -131,24 +128,101 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 		panic("Register index out of range.")
 	}
 
-	// Special case
-	// If operator is generalized permutation matrix => trivial parallelization is possible.
-	// If operator is not generalized permutation matrix, but still single qbit
-	// => Actually, almost every gate is single qbit. This case, we can still parallelize somehow.
-	if operator.IsGenPermutMatrix() {
-		circ.applyGenPermut(operator, iregs...)
+	if len(iregs) == 1 {
+		circ.applyOneQbit(operator, iregs[0])
 		return
 	}
 
-	if len(iregs) == 1 {
-		circ.applySingle(operator, iregs[0])
+	if len(iregs) == 2 {
+		circ.applyTwoQbit(operator, iregs[0], iregs[1])
 		return
 	}
 
 	// Generic Fallback.
+	circ.applyFallback(operator, iregs...)
+}
 
-	// Tensor Product takes too long, we need another method.
-	// Idea: decompose state vector to basis states?
+// Special case of Apply(), when there is only one input registers.
+// Implemented as in-place swapping.
+func (circ *Circuit) applyOneQbit(operator matrix.Matrix, ireg int) {
+	if circ.N == 1 {
+		// No need for further optimization, it is fast enough.
+		circ.State = circ.State.Apply(operator)
+		return
+	}
+
+	wg := &sync.WaitGroup{}
+	chunksize := 1 << ((circ.N - 1) / 2)
+
+	for i := 0; i < (len(circ.State) >> 1); i += chunksize {
+		wg.Add(1)
+		go func(start int) {
+			defer wg.Done()
+
+			for n := start; n < start+chunksize; n++ {
+				n0 := ((n >> ireg) << (ireg + 1)) + (n % (1 << ireg))
+				n1 := n0 | (1 << ireg)
+
+				amp0 := circ.State[n0]
+				amp1 := circ.State[n1]
+
+				circ.State[n0] = amp0*operator[0][0] + amp1*operator[0][1]
+				circ.State[n1] = amp0*operator[1][0] + amp1*operator[1][1]
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+// Special case of Apply(), when there are two input registers.
+// Implemented as in-place swapping.
+func (circ *Circuit) applyTwoQbit(operator matrix.Matrix, ireg0, ireg1 int) {
+	if ireg0 == ireg1 {
+		panic("Same input registers.")
+	}
+
+	if circ.N == 2 {
+		// No need for further optimization, it is fast enough. (I think.)
+		circ.State = circ.State.Apply(operator)
+		return
+	}
+
+	wg := &sync.WaitGroup{}
+	chunksize := 1 << ((circ.N - 2) / 2)
+
+	for i := 0; i < (len(circ.State) >> 2); i += chunksize {
+		wg.Add(1)
+		go func(start int) {
+			defer wg.Done()
+
+			for n := start; n < start+chunksize; n++ {
+				n0 := ((n >> ireg0) << (ireg0 + 1)) + (n % (1 << ireg0))
+				n1 := n0 | (1 << ireg0)
+
+				n00 := ((n0 >> ireg1) << (ireg1 + 1)) + (n0 % (1 << ireg1))
+				n01 := n00 | (1 << ireg1)
+				n10 := ((n1 >> ireg1) << (ireg1 + 1)) + (n1 % (1 << ireg1))
+				n11 := n10 | (1 << ireg1)
+
+				amp00 := circ.State[n00]
+				amp01 := circ.State[n01]
+				amp10 := circ.State[n10]
+				amp11 := circ.State[n11]
+
+				circ.State[n00] = amp00*operator[0][0] + amp01*operator[0][1] + amp10*operator[0][2] + amp11*operator[0][1]
+				circ.State[n01] = amp00*operator[1][0] + amp01*operator[1][1] + amp10*operator[1][2] + amp11*operator[1][1]
+				circ.State[n10] = amp00*operator[2][0] + amp01*operator[2][1] + amp10*operator[2][2] + amp11*operator[2][1]
+				circ.State[n11] = amp00*operator[3][0] + amp01*operator[3][1] + amp10*operator[3][2] + amp11*operator[3][1]
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+// General Fallback for Apply(). No optimization.
+func (circ *Circuit) applyFallback(operator matrix.Matrix, iregs ...int) {
 	circ.cleartemp()
 
 	for basis, amp := range circ.State {
@@ -181,118 +255,6 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 			circ.temp[newbasis] += amp * newamp
 		}
 	}
-
-	copy(circ.State, circ.temp)
-}
-
-// Special case of apply, when operator is a single-qbit gate.
-// This case, we use parallelization for 2^(n-1) loops.
-func (circ *Circuit) applySingle(operator matrix.Matrix, ireg int) {
-	// checks for operator is already done in Apply()
-	// Note that operator is assumed to be non-generalized permutation matrix.
-
-	wg := &sync.WaitGroup{}
-
-	// We can still parallelize 2^(n-1) loops.
-	// How? Suppose basis = |0101> and ireg = 2.
-	// Then, U|0101> = a|0001> + b|0101>
-	// So, we can "group" |0101> and |0001>, and parallelize for 0, 1, 3th qbit.
-
-	chunksize := (1 << ((circ.N - 1) / 2))
-	circ.cleartemp()
-
-	memo := [2][2]complex128{{operator[0][0], operator[1][0]}, {operator[0][1], operator[1][1]}}
-
-	for i := 0; i < (1 << (circ.N - 1)); i += chunksize {
-		wg.Add(1)
-		go func(start int) {
-			defer wg.Done()
-
-			bases := [2]int{0, 0}
-			for n := start; n < start+chunksize; n++ {
-				bases[0] = ((n >> ireg) << (ireg + 1)) + (n % (1 << ireg))
-				bases[1] = bases[0] | (1 << ireg)
-
-				for ibasis, basis := range bases {
-					amp := circ.State[basis]
-					if amp == 0 {
-						continue
-					}
-
-					circ.temp[bases[0]] += amp * memo[0][ibasis]
-					circ.temp[bases[1]] += amp * memo[1][ibasis]
-				}
-			}
-		}(i)
-	}
-
-	wg.Wait()
-
-	copy(circ.State, circ.temp)
-}
-
-// Special case of apply, when operator is generalized permutation matrix.
-// This case, trivial parallelization is possible.
-func (circ *Circuit) applyGenPermut(operator matrix.Matrix, iregs ...int) {
-	// Generalized permutation matrix operators are trivially parallelizable.
-
-	// Precomputate maps.
-	memo_basis := make([]int, 1<<len(iregs))
-	memo_amp := make([]complex128, 1<<len(iregs))
-
-	wg_memo := &sync.WaitGroup{}
-
-	for i := 0; i < len(operator); i++ {
-		wg_memo.Add(1)
-		go func(col int) {
-			defer wg_memo.Done()
-
-			for j := 0; j < len(operator); j++ {
-				if operator[col][j] != 0 {
-					memo_basis[col] = j
-					memo_amp[col] = operator[j][col]
-				}
-			}
-		}(i)
-	}
-
-	wg_memo.Wait()
-
-	wg := &sync.WaitGroup{}
-	chunksize := 1 << (circ.N / 2)
-	circ.cleartemp()
-
-	for i := 0; i < circ.State.Dim(); i += chunksize {
-		wg.Add(1)
-		go func(start int) {
-			defer wg.Done()
-
-			for basis := start; basis < start+chunksize; basis++ {
-				amp := circ.State[basis]
-
-				if amp == 0 {
-					continue
-				}
-
-				ibasis := 0
-				for idx, val := range iregs {
-					ibasis += ((basis >> val) & 1) << idx
-				}
-
-				newibasis := memo_basis[ibasis]
-				newamp := memo_amp[ibasis]
-
-				newbasis := basis
-				for idx, val := range iregs {
-					bit := (newibasis >> idx) & 1
-					newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
-				}
-				circ.temp[newbasis] = amp * newamp
-			}
-		}(i)
-	}
-
-	wg.Wait()
 
 	copy(circ.State, circ.temp)
 }
@@ -337,6 +299,17 @@ func (circ *Circuit) T(ireg int) {
 	circ.Apply(gate.T(), ireg)
 }
 
+// Used for calculating control bits in control-functions.
+func checkControlBit(n int, cs []int) bool {
+	res := 0
+
+	for _, idx := range cs {
+		res ^= (n >> idx) & 1
+	}
+
+	return res == 1
+}
+
 // Applies the control-version of operator to circuit. cs is the control qbits, xs is the input qbits.
 func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 	if !operator.IsUnitary() {
@@ -351,17 +324,122 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 		panic("Register index out of range.")
 	}
 
-	if operator.IsGenPermutMatrix() {
-		circ.controlGenPermut(operator, cs, xs)
-		return
+	if len(cs)+len(xs) > circ.N {
+		panic("Too many registers.")
 	}
 
 	if len(xs) == 1 {
-		circ.controlSingle(operator, cs, xs[0])
+		circ.controlOneQbit(operator, cs, xs[0])
+		return
+	}
+
+	if len(xs) == 2 {
+		circ.controlTwoQubit(operator, cs, xs[0], xs[1])
 		return
 	}
 
 	// Generic Fallback.
+	circ.controlFallback(operator, cs, xs)
+}
+
+// Special case of Apply(), when there is only one input registers.
+// Implemented as in-place swapping.
+func (circ *Circuit) controlOneQbit(operator matrix.Matrix, cs []int, ireg int) {
+	cs_shifted := make([]int, len(cs))
+
+	for i := range cs_shifted {
+		cs_shifted[i] = cs[i]
+		if cs[i] > ireg {
+			cs_shifted[i]--
+		}
+	}
+
+	wg := &sync.WaitGroup{}
+	chunksize := 1 << ((circ.N - 1) / 2)
+
+	for i := 0; i < (len(circ.State) >> 1); i += chunksize {
+		wg.Add(1)
+		go func(start int) {
+			defer wg.Done()
+
+			for n := start; n < start+chunksize; n++ {
+				if !checkControlBit(n, cs_shifted) {
+					continue
+				}
+
+				n0 := ((n >> ireg) << (ireg + 1)) + (n % (1 << ireg))
+				n1 := n0 | (1 << ireg)
+
+				amp0 := circ.State[n0]
+				amp1 := circ.State[n1]
+
+				circ.State[n0] = amp0*operator[0][0] + amp1*operator[0][1]
+				circ.State[n1] = amp0*operator[1][0] + amp1*operator[1][1]
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+// Special case of Control(), when there are two input registers.
+// Implemented as in-place swapping.
+func (circ *Circuit) controlTwoQubit(operator matrix.Matrix, cs []int, ireg0, ireg1 int) {
+	if ireg0 == ireg1 {
+		panic("Same input registers.")
+	}
+
+	cs_shifted := make([]int, len(cs))
+
+	for i := range cs_shifted {
+		cs_shifted[i] = cs[i]
+		if cs[i] > ireg0 {
+			cs_shifted[i]--
+		}
+		if cs[i] > ireg1 {
+			cs_shifted[i]--
+		}
+	}
+
+	wg := &sync.WaitGroup{}
+	chunksize := 1 << ((circ.N - 2) / 2)
+
+	for i := 0; i < (len(circ.State) >> 2); i += chunksize {
+		wg.Add(1)
+		go func(start int) {
+			defer wg.Done()
+
+			for n := start; n < start+chunksize; n++ {
+				if !checkControlBit(n, cs_shifted) {
+					continue
+				}
+
+				n0 := ((n >> ireg0) << (ireg0 + 1)) + (n % (1 << ireg0))
+				n1 := n0 | (1 << ireg0)
+
+				n00 := ((n0 >> ireg1) << (ireg1 + 1)) + (n0 % (1 << ireg1))
+				n01 := n00 | (1 << ireg1)
+				n10 := ((n1 >> ireg1) << (ireg1 + 1)) + (n1 % (1 << ireg1))
+				n11 := n10 | (1 << ireg1)
+
+				amp00 := circ.State[n00]
+				amp01 := circ.State[n01]
+				amp10 := circ.State[n10]
+				amp11 := circ.State[n11]
+
+				circ.State[n00] = amp00*operator[0][0] + amp01*operator[0][1] + amp10*operator[0][2] + amp11*operator[0][1]
+				circ.State[n01] = amp00*operator[1][0] + amp01*operator[1][1] + amp10*operator[1][2] + amp11*operator[1][1]
+				circ.State[n10] = amp00*operator[2][0] + amp01*operator[2][1] + amp10*operator[2][2] + amp11*operator[2][1]
+				circ.State[n11] = amp00*operator[3][0] + amp01*operator[3][1] + amp10*operator[3][2] + amp11*operator[3][1]
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+// General Fallback for Control(). Similar to applyFallback(), No optimization.
+func (circ *Circuit) controlFallback(operator matrix.Matrix, cs []int, xs []int) {
 	circ.cleartemp()
 
 	for basis, amp := range circ.State {
@@ -369,13 +447,7 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 			continue
 		}
 
-		ctrl := 0
-		for _, v := range cs {
-			ctrl ^= (basis >> v) & 1
-		}
-
-		if ctrl == 0 {
-			circ.temp[basis] = amp
+		if !checkControlBit(basis, cs) {
 			continue
 		}
 
@@ -401,129 +473,6 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 	copy(circ.State, circ.temp)
 }
 
-// Special case of control-operator, when the operator is single qbit.
-// Similar to applySingle.
-func (circ *Circuit) controlSingle(operator matrix.Matrix, cs []int, x int) {
-	wg := &sync.WaitGroup{}
-
-	chunksize := (1 << ((circ.N - 1) / 2))
-	circ.cleartemp()
-
-	memo := [2][2]complex128{{operator[0][0], operator[1][0]}, {operator[0][1], operator[1][1]}}
-
-	for i := 0; i < (1 << (circ.N - 1)); i += chunksize {
-		wg.Add(1)
-		go func(start int) {
-			defer wg.Done()
-
-			bases := [2]int{0, 0}
-			for n := start; n < start+chunksize; n++ {
-				bases[0] = ((n >> x) << (x + 1)) + (n % (1 << x))
-				bases[1] = bases[0] | (1 << x)
-
-				ctrl := 0
-				for _, v := range cs {
-					ctrl ^= (bases[0] >> v) & 1
-				}
-
-				if ctrl == 0 {
-					circ.temp[bases[0]] = circ.State[bases[0]]
-					circ.temp[bases[1]] = circ.State[bases[1]]
-					continue
-				}
-
-				for ibasis, basis := range bases {
-					amp := circ.State[basis]
-					if amp == 0 {
-						continue
-					}
-
-					circ.temp[bases[0]] += amp * memo[0][ibasis]
-					circ.temp[bases[1]] += amp * memo[1][ibasis]
-				}
-			}
-		}(i)
-	}
-
-	wg.Wait()
-
-	copy(circ.State, circ.temp)
-}
-
-// Special case of control-operator, when the operator is generalized permutation matrix.
-// Similar to applyGenPermut.
-func (circ *Circuit) controlGenPermut(operator matrix.Matrix, cs []int, xs []int) {
-	// Precomputate maps.
-	memo_basis := make([]int, 1<<len(xs))
-	memo_amp := make([]complex128, 1<<len(xs))
-
-	wg_memo := &sync.WaitGroup{}
-
-	for i := 0; i < len(operator); i++ {
-		wg_memo.Add(1)
-		go func(col int) {
-			defer wg_memo.Done()
-
-			for j := 0; j < len(operator); j++ {
-				if operator[col][j] != 0 {
-					memo_basis[col] = j
-					memo_amp[col] = operator[j][col]
-				}
-			}
-		}(i)
-	}
-
-	wg_memo.Wait()
-
-	wg := &sync.WaitGroup{}
-	chunksize := (1 << (circ.N / 2))
-	circ.cleartemp()
-
-	for i := 0; i < circ.State.Dim(); i += chunksize {
-		wg.Add(1)
-		go func(start int) {
-			defer wg.Done()
-
-			for basis := start; basis < start+chunksize; basis++ {
-				amp := circ.State[basis]
-
-				if amp == 0 {
-					continue
-				}
-
-				ctrl := 0
-				for _, v := range cs {
-					ctrl ^= (basis >> v) & 1
-				}
-
-				if ctrl == 0 {
-					circ.temp[basis] = amp
-					continue
-				}
-
-				ibasis := 0
-				for idx, val := range xs {
-					ibasis += ((basis >> val) & 1) << idx
-				}
-
-				newibasis := memo_basis[ibasis]
-				newamp := memo_amp[ibasis]
-
-				newbasis := basis
-				for idx, val := range xs {
-					bit := (newibasis >> idx) & 1
-					newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
-				}
-				circ.temp[newbasis] = amp * newamp
-			}
-		}(i)
-	}
-
-	wg.Wait()
-
-	copy(circ.State, circ.temp)
-}
-
 // Alias for Control() when control qbit and input qbit are all single.
 func (circ *Circuit) controlSingleSingle(operator matrix.Matrix, c int, x int) {
 	circ.Control(operator, []int{c}, []int{x})
@@ -544,37 +493,37 @@ func (circ *Circuit) Swap(x int, y int) {
 	if x < 0 || x >= circ.N || y < 0 || y >= circ.N {
 		panic("Register index out of range.")
 	}
-	chunksize := 1 << (circ.N / 2)
-	wg := &sync.WaitGroup{}
-	circ.cleartemp()
 
-	for i := 0; i < len(circ.State); i += chunksize {
+	if x == y {
+		panic("Swapping same registers.")
+	}
+
+	if circ.N == 2 {
+		circ.State[0b01], circ.State[0b10] = circ.State[0b10], circ.State[0b01]
+		return
+	}
+
+	chunksize := 1 << ((circ.N - 2) / 2)
+	wg := &sync.WaitGroup{}
+
+	for i := 0; i < (len(circ.State) >> 2); i += chunksize {
 		wg.Add(1)
 		go func(start int) {
 			defer wg.Done()
 
 			for n := start; n < start+chunksize; n++ {
-				a := circ.State[n]
-				if a == 0 {
-					continue
-				}
+				n0 := ((n >> x) << (x + 1)) + (n % (1 << x))
+				n1 := n0 | (1 << x)
 
-				bx := (n >> x) & 1
-				by := (n >> y) & 1
+				n01 := ((n0 >> y) << (y + 1)) + (n0 % (1 << y)) + (1 << y)
+				n10 := ((n1 >> y) << (y + 1)) + (n1 % (1 << y))
 
-				nn := n
-
-				nn = (nn | (1 << x)) - ((by ^ 1) << x)
-				nn = (nn | (1 << y)) - ((bx ^ 1) << y)
-
-				circ.temp[nn] = a
+				circ.State[n01], circ.State[n10] = circ.State[n10], circ.State[n01]
 			}
 		}(i)
 	}
 
 	wg.Wait()
-
-	copy(circ.State, circ.temp)
 }
 
 // Applies QFT to [start, end).
@@ -595,7 +544,6 @@ func (circ *Circuit) QFT(start, end int) {
 
 	for i := end - 1; i >= start; i-- {
 		circ.H(i)
-
 		for j := start; j < i; j++ {
 			circ.controlSingleSingle(gate.P(phis[i-j]), j, i)
 		}
@@ -643,17 +591,17 @@ func (circ *Circuit) Measure(qbits ...int) int {
 		panic("Register index out of range.")
 	}
 
-	prob := make([]float64, 1<<len(qbits))
+	probs := make([]float64, 1<<len(qbits))
 
-	for n, a := range circ.State {
-		if a == 0 {
+	for n, amp := range circ.State {
+		if amp == 0 {
 			continue
 		}
 		o := 0
 		for i, q := range qbits {
 			o += ((n >> q) & 1) << i
 		}
-		prob[o] += cmplx.Abs(a) * cmplx.Abs(a)
+		probs[o] += real(amp)*real(amp) + imag(amp)*imag(amp)
 	}
 
 	// Wait, Golang does not have weighted sampling? WTF.
@@ -662,7 +610,7 @@ func (circ *Circuit) Measure(qbits ...int) int {
 	output := 0
 	accsum := 0.0
 
-	for i, p := range prob {
+	for i, p := range probs {
 		accsum += p
 		if accsum >= rand {
 			output = i
@@ -670,34 +618,24 @@ func (circ *Circuit) Measure(qbits ...int) int {
 		}
 	}
 
-	chunksize := 1 << (circ.N / 2)
-	wg := &sync.WaitGroup{}
+	a := 0.0
+	for n, amp := range circ.State {
+		if amp == 0 {
+			continue
+		}
 
-	for i := 0; i < len(circ.State); i += chunksize {
-		wg.Add(1)
-		go func(start int) {
-			defer wg.Done()
-
-			for n := start; n < start+chunksize; n++ {
-				for i, q := range qbits {
-					if (output>>i)&1 != (n>>q)&1 {
-						circ.State[n] = 0
-						continue
-					}
-				}
+		for i, q := range qbits {
+			if (n>>q)&1 != (output>>i)&1 {
+				a += real(amp)*real(amp) + imag(amp)*imag(amp)
+				circ.State[n] = 0
+				break
 			}
-		}(i)
+		}
 	}
+	s := complex(math.Sqrt(1-a), 0)
 
-	wg.Wait()
-
-	// In-place normalization with goroutines.
-	var sum complex128 = 0
-	for _, v := range circ.State {
-		sum += complex(cmplx.Abs(v)*cmplx.Abs(v), 0)
-	}
-
-	wg = &sync.WaitGroup{}
+	wg := &sync.WaitGroup{}
+	chunksize := 1 << (circ.N / 2)
 
 	for i := 0; i < len(circ.State); i += chunksize {
 		wg.Add(1)
@@ -705,7 +643,9 @@ func (circ *Circuit) Measure(qbits ...int) int {
 			defer wg.Done()
 
 			for n := start; n < start+chunksize; n++ {
-				circ.State[n] /= sum
+				if circ.State[n] != 0 {
+					circ.State[n] /= s
+				}
 			}
 		}(i)
 	}

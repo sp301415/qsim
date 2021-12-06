@@ -121,6 +121,20 @@ func TestMultiApply(t *testing.T) {
 	}
 }
 
+func TestHH(t *testing.T) {
+	c1 := qsim.NewCircuit(3)
+	c2 := qsim.NewCircuit(3)
+
+	c1.H(0)
+	c1.H(1)
+
+	c2.Apply(gate.H().Tensor(gate.H()), 0, 1)
+
+	if !c1.State.Equals(c2.State) {
+		t.Fail()
+	}
+}
+
 func TestOracle(t *testing.T) {
 	c := qsim.NewCircuit(2)
 

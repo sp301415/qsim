@@ -18,7 +18,7 @@ func shorInstance(N int, verbose bool) int {
 
 		if K != 1 {
 			if verbose {
-				fmt.Println("[-] Found factor by luck. We start again.")
+				fmt.Println("[!] Found factor by luck. We start again.")
 			}
 			return 0
 		} else {
@@ -74,7 +74,7 @@ func shorInstance(N int, verbose bool) int {
 	y := q.Measure(iregs...)
 
 	if verbose {
-		fmt.Printf("[+] Found y: %d\n", y)
+		fmt.Printf("[+] Measured output: %d\n", y)
 	}
 
 	// Again, Classical Part.
@@ -101,12 +101,16 @@ func shorInstance(N int, verbose bool) int {
 		factor = numbers.GCD(numbers.PowMod(a, r/2, N)+v, N)
 
 		if verbose {
-			fmt.Printf("[*] Guessed factor: %d...\n", factor)
+			fmt.Printf("[*] Checking factor: %d...\n", factor)
 		}
 
 		if factor != 1 && factor != N && N%factor == 0 {
 			return factor
 		}
+	}
+
+	if verbose {
+		fmt.Println("[!] Failed to find factor. :(")
 	}
 
 	return 0
