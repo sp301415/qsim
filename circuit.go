@@ -26,6 +26,12 @@ type Circuit struct {
 	temp  vector.Vector
 }
 
+func (circ *Circuit) cleartemp() {
+	for i := range circ.temp {
+		circ.temp[i] = 0
+	}
+}
+
 // Generates new circuit with n qbits. Initializes with |0...0>.
 func NewCircuit(n int) Circuit {
 	if n < 1 {
@@ -35,8 +41,6 @@ func NewCircuit(n int) Circuit {
 	if n > 63 {
 		panic("This simulator currently supports up to 63 qbits.")
 	}
-
-	ZEROVEC = vector.Zeros(1 << n)
 
 	q := qbit.Zeros(n)
 	temp := vector.Zeros(1 << n)
@@ -58,7 +62,10 @@ func (circ *Circuit) InitCbit(n int) {
 		panic("Invalid cbit length.")
 	}
 
-	circ.State = qbit.NewFromCbit(n, circ.N)
+	for i := range circ.State {
+		circ.State[i] = 0
+	}
+	circ.State[n] = 1
 }
 
 // Applies the oracle f to circuit. Maps |x>_{iregs}|y>_{oregs} -> |x>_{iregs}|y^f(x)>_{oregs}.
@@ -74,7 +81,7 @@ func (circ *Circuit) ApplyOracle(oracle func(int) int, iregs []int, oregs []int)
 
 	wg := &sync.WaitGroup{}
 	chunksize := 1 << (circ.N / 2)
-	copy(circ.temp, ZEROVEC)
+	circ.cleartemp()
 
 	for i := 0; i < len(circ.State); i += chunksize {
 		wg.Add(1)
@@ -89,14 +96,14 @@ func (circ *Circuit) ApplyOracle(oracle func(int) int, iregs []int, oregs []int)
 
 				input := 0
 				for idx, val := range iregs {
-					input += ((basis >> val) % 2) << idx
+					input += ((basis >> val) & 1) << idx
 				}
 
 				output := oracle(input)
 
 				newbasis := basis
 				for idx, val := range oregs {
-					bit := (output >> idx) % 2
+					bit := (output >> idx) & 1
 					newbasis ^= bit << val
 				}
 
@@ -142,7 +149,7 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 
 	// Tensor Product takes too long, we need another method.
 	// Idea: decompose state vector to basis states?
-	copy(circ.temp, ZEROVEC)
+	circ.cleartemp()
 
 	for basis, amp := range circ.State {
 		if amp == 0 {
@@ -154,7 +161,7 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 		ibasis := 0
 		for idx, val := range iregs {
 			// Extract val-th bit from basis, plug it in to idx-th bit of ibasis.
-			ibasis += ((basis >> val) % 2) << idx
+			ibasis += ((basis >> val) & 1) << idx
 		}
 		// Generate new qbit from x, apply operator to it.
 		newibasis_q := qbit.NewFromCbit(ibasis, len(iregs)).Apply(operator)
@@ -168,7 +175,7 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 			// Extract idx-th bit from newibasis, plug it in to val-th bit of basis.
 			newbasis := basis
 			for idx, val := range iregs {
-				bit := (newibasis >> idx) % 2
+				bit := (newibasis >> idx) & 1
 				newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
 			}
 			circ.temp[newbasis] += amp * newamp
@@ -192,7 +199,7 @@ func (circ *Circuit) applySingle(operator matrix.Matrix, ireg int) {
 	// So, we can "group" |0101> and |0001>, and parallelize for 0, 1, 3th qbit.
 
 	chunksize := (1 << ((circ.N - 1) / 2))
-	copy(circ.temp, ZEROVEC)
+	circ.cleartemp()
 
 	memo := [2][2]complex128{{operator[0][0], operator[1][0]}, {operator[0][1], operator[1][1]}}
 
@@ -253,7 +260,7 @@ func (circ *Circuit) applyGenPermut(operator matrix.Matrix, iregs ...int) {
 
 	wg := &sync.WaitGroup{}
 	chunksize := 1 << (circ.N / 2)
-	copy(circ.temp, ZEROVEC)
+	circ.cleartemp()
 
 	for i := 0; i < circ.State.Dim(); i += chunksize {
 		wg.Add(1)
@@ -269,7 +276,7 @@ func (circ *Circuit) applyGenPermut(operator matrix.Matrix, iregs ...int) {
 
 				ibasis := 0
 				for idx, val := range iregs {
-					ibasis += ((basis >> val) % 2) << idx
+					ibasis += ((basis >> val) & 1) << idx
 				}
 
 				newibasis := memo_basis[ibasis]
@@ -277,7 +284,7 @@ func (circ *Circuit) applyGenPermut(operator matrix.Matrix, iregs ...int) {
 
 				newbasis := basis
 				for idx, val := range iregs {
-					bit := (newibasis >> idx) % 2
+					bit := (newibasis >> idx) & 1
 					newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
 				}
 				circ.temp[newbasis] = amp * newamp
@@ -355,7 +362,7 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 	}
 
 	// Generic Fallback.
-	copy(circ.temp, ZEROVEC)
+	circ.cleartemp()
 
 	for basis, amp := range circ.State {
 		if amp == 0 {
@@ -364,7 +371,7 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 
 		ctrl := 0
 		for _, v := range cs {
-			ctrl ^= (basis >> v) % 2
+			ctrl ^= (basis >> v) & 1
 		}
 
 		if ctrl == 0 {
@@ -374,7 +381,7 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 
 		ibasis := 0
 		for idx, val := range xs {
-			ibasis += ((basis >> val) % 2) << idx
+			ibasis += ((basis >> val) & 1) << idx
 		}
 		newibasis_q := qbit.NewFromCbit(ibasis, len(xs)).Apply(operator)
 
@@ -384,7 +391,7 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 			}
 			newbasis := basis
 			for idx, val := range xs {
-				bit := (newibasis >> idx) % 2
+				bit := (newibasis >> idx) & 1
 				newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
 			}
 			circ.temp[newbasis] += amp * newamp
@@ -400,7 +407,7 @@ func (circ *Circuit) controlSingle(operator matrix.Matrix, cs []int, x int) {
 	wg := &sync.WaitGroup{}
 
 	chunksize := (1 << ((circ.N - 1) / 2))
-	copy(circ.temp, ZEROVEC)
+	circ.cleartemp()
 
 	memo := [2][2]complex128{{operator[0][0], operator[1][0]}, {operator[0][1], operator[1][1]}}
 
@@ -416,7 +423,7 @@ func (circ *Circuit) controlSingle(operator matrix.Matrix, cs []int, x int) {
 
 				ctrl := 0
 				for _, v := range cs {
-					ctrl ^= (bases[0] >> v) % 2
+					ctrl ^= (bases[0] >> v) & 1
 				}
 
 				if ctrl == 0 {
@@ -470,7 +477,7 @@ func (circ *Circuit) controlGenPermut(operator matrix.Matrix, cs []int, xs []int
 
 	wg := &sync.WaitGroup{}
 	chunksize := (1 << (circ.N / 2))
-	copy(circ.temp, ZEROVEC)
+	circ.cleartemp()
 
 	for i := 0; i < circ.State.Dim(); i += chunksize {
 		wg.Add(1)
@@ -486,7 +493,7 @@ func (circ *Circuit) controlGenPermut(operator matrix.Matrix, cs []int, xs []int
 
 				ctrl := 0
 				for _, v := range cs {
-					ctrl ^= (basis >> v) % 2
+					ctrl ^= (basis >> v) & 1
 				}
 
 				if ctrl == 0 {
@@ -496,7 +503,7 @@ func (circ *Circuit) controlGenPermut(operator matrix.Matrix, cs []int, xs []int
 
 				ibasis := 0
 				for idx, val := range xs {
-					ibasis += ((basis >> val) % 2) << idx
+					ibasis += ((basis >> val) & 1) << idx
 				}
 
 				newibasis := memo_basis[ibasis]
@@ -504,7 +511,7 @@ func (circ *Circuit) controlGenPermut(operator matrix.Matrix, cs []int, xs []int
 
 				newbasis := basis
 				for idx, val := range xs {
-					bit := (newibasis >> idx) % 2
+					bit := (newibasis >> idx) & 1
 					newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
 				}
 				circ.temp[newbasis] = amp * newamp
@@ -539,7 +546,7 @@ func (circ *Circuit) Swap(x int, y int) {
 	}
 	chunksize := 1 << (circ.N / 2)
 	wg := &sync.WaitGroup{}
-	copy(circ.temp, ZEROVEC)
+	circ.cleartemp()
 
 	for i := 0; i < len(circ.State); i += chunksize {
 		wg.Add(1)
@@ -552,8 +559,8 @@ func (circ *Circuit) Swap(x int, y int) {
 					continue
 				}
 
-				bx := (n >> x) % 2
-				by := (n >> y) % 2
+				bx := (n >> x) & 1
+				by := (n >> y) & 1
 
 				nn := n
 
@@ -644,9 +651,9 @@ func (circ *Circuit) Measure(qbits ...int) int {
 		}
 		o := 0
 		for i, q := range qbits {
-			o += ((n >> q) % 2) << i
+			o += ((n >> q) & 1) << i
 		}
-		prob[o] += math.Pow(cmplx.Abs(a), 2.0)
+		prob[o] += cmplx.Abs(a) * cmplx.Abs(a)
 	}
 
 	// Wait, Golang does not have weighted sampling? WTF.
@@ -673,7 +680,7 @@ func (circ *Circuit) Measure(qbits ...int) int {
 
 			for n := start; n < start+chunksize; n++ {
 				for i, q := range qbits {
-					if (output>>i)%2 != (n>>q)%2 {
+					if (output>>i)&1 != (n>>q)&1 {
 						circ.State[n] = 0
 						continue
 					}
@@ -684,7 +691,26 @@ func (circ *Circuit) Measure(qbits ...int) int {
 
 	wg.Wait()
 
-	circ.State = circ.State.Normalize()
+	// In-place normalization with goroutines.
+	var sum complex128 = 0
+	for _, v := range circ.State {
+		sum += complex(cmplx.Abs(v)*cmplx.Abs(v), 0)
+	}
+
+	wg = &sync.WaitGroup{}
+
+	for i := 0; i < len(circ.State); i += chunksize {
+		wg.Add(1)
+		go func(start int) {
+			defer wg.Done()
+
+			for n := start; n < start+chunksize; n++ {
+				circ.State[n] /= sum
+			}
+		}(i)
+	}
+
+	wg.Wait()
 
 	return output
 }
