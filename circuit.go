@@ -764,7 +764,7 @@ func (circ *Circuit) InvQFT(start, end int) {
 
 // Measure qbits.
 func (circ *Circuit) Measure(qbits ...int) int {
-	qbits = sort.IntSlice(qbits)
+	sort.Ints(qbits)
 
 	if qbits[0] < 0 || qbits[len(qbits)-1] > circ.N-1 {
 		panic("Register index out of range.")
@@ -797,7 +797,7 @@ func (circ *Circuit) Measure(qbits ...int) int {
 		}
 	}
 
-	s := complex(math.Sqrt(1-probs[output]), 0)
+	s := complex(math.Sqrt(probs[output]), 0)
 
 	for n, amp := range circ.State {
 		if amp == 0 {
@@ -822,7 +822,6 @@ func (circ Circuit) StateToString() string {
 	q := circ.State
 
 	qs := make([]string, 0)
-	d := numbers.BitLength(q.Dim()) - 1
 
 	for i, v := range q {
 		if v == 0 {
@@ -843,7 +842,7 @@ func (circ Circuit) StateToString() string {
 			res += fmt.Sprint(v)
 		}
 
-		qs = append(qs, res+fmt.Sprintf("|%0*b>", d, i))
+		qs = append(qs, res+fmt.Sprintf("|%0*b>", circ.N, i))
 	}
 
 	return strings.Join(qs, " + ")
