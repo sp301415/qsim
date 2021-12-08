@@ -13,7 +13,7 @@ import (
 	"github.com/sp301415/qsim/math/numbers"
 	"github.com/sp301415/qsim/math/vector"
 	"github.com/sp301415/qsim/quantum/gate"
-	"github.com/sp301415/qsim/quantum/qbit"
+	"github.com/sp301415/qsim/quantum/qubit"
 )
 
 const PARALLEL_THRESHOLD int = 10
@@ -31,26 +31,26 @@ func (circ *Circuit) cleartemp() {
 	}
 }
 
-// Generates new circuit with n qbits. Initializes with |0...0>.
+// Generates new circuit with n qubits. Initializes with |0...0>.
 func NewCircuit(n int) Circuit {
 	if n < 1 {
-		panic("Invalid qbit length.")
+		panic("Invalid qubit length.")
 	}
 
 	if n > 63 {
-		panic("This simulator currently supports up to 63 qbits.")
+		panic("This simulator currently supports up to 63 qubits.")
 	}
 
-	q := qbit.Zeros(n)
+	q := qubit.Zeros(n)
 	temp := vector.Zeros(1 << n)
 
 	return Circuit{N: n, State: q, temp: temp}
 }
 
 // Sets state to q.
-func (circ *Circuit) InitQbit(q vector.Vector) {
+func (circ *Circuit) InitQubit(q vector.Vector) {
 	if q.Dim() != (1 << circ.N) {
-		panic("Invalid qbit length.")
+		panic("Invalid qubit length.")
 	}
 	circ.State = q
 }
@@ -156,7 +156,7 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 	}
 
 	if len(operator) != 1<<len(iregs) {
-		panic("Operator size does not match with input qbits.")
+		panic("Operator size does not match with input qubits.")
 	}
 
 	if numbers.Min(iregs...) < 0 || numbers.Max(iregs...) >= circ.N {
@@ -165,22 +165,22 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 
 	if circ.N > PARALLEL_THRESHOLD {
 		if len(iregs) == 1 {
-			circ.applyOneQbit(operator, iregs[0])
+			circ.applyOneQubit(operator, iregs[0])
 			return
 		}
 
 		if len(iregs) == 2 {
-			circ.applyTwoQbit(operator, iregs[0], iregs[1])
+			circ.applyTwoQubit(operator, iregs[0], iregs[1])
 			return
 		}
 	} else {
 		if len(iregs) == 1 {
-			circ.applyOneQbitFallback(operator, iregs[0])
+			circ.applyOneQubitFallback(operator, iregs[0])
 			return
 		}
 
 		if len(iregs) == 2 {
-			circ.applyTwoQbitFallback(operator, iregs[0], iregs[1])
+			circ.applyTwoQubitFallback(operator, iregs[0], iregs[1])
 			return
 		}
 	}
@@ -191,7 +191,7 @@ func (circ *Circuit) Apply(operator matrix.Matrix, iregs ...int) {
 
 // Special case of Apply(), when there is only one input registers.
 // Implemented as in-place swapping.
-func (circ *Circuit) applyOneQbit(operator matrix.Matrix, ireg int) {
+func (circ *Circuit) applyOneQubit(operator matrix.Matrix, ireg int) {
 	wg := &sync.WaitGroup{}
 	chunksize := 1 << ((circ.N - 1) / 2)
 
@@ -216,8 +216,8 @@ func (circ *Circuit) applyOneQbit(operator matrix.Matrix, ireg int) {
 	wg.Wait()
 }
 
-// applyOneQbit() with no parallelization.
-func (circ *Circuit) applyOneQbitFallback(operator matrix.Matrix, ireg int) {
+// applyOneQubit() with no parallelization.
+func (circ *Circuit) applyOneQubitFallback(operator matrix.Matrix, ireg int) {
 	for n := 0; n < (len(circ.State) >> 1); n++ {
 		n0 := ((n >> ireg) << (ireg + 1)) + (n & ((1 << ireg) - 1))
 		n1 := n0 | (1 << ireg)
@@ -232,7 +232,7 @@ func (circ *Circuit) applyOneQbitFallback(operator matrix.Matrix, ireg int) {
 
 // Special case of Apply(), when there are two input registers.
 // Implemented as in-place swapping.
-func (circ *Circuit) applyTwoQbit(operator matrix.Matrix, ireg0, ireg1 int) {
+func (circ *Circuit) applyTwoQubit(operator matrix.Matrix, ireg0, ireg1 int) {
 	if ireg0 == ireg1 {
 		panic("Same input registers.")
 	}
@@ -276,8 +276,8 @@ func (circ *Circuit) applyTwoQbit(operator matrix.Matrix, ireg0, ireg1 int) {
 	wg.Wait()
 }
 
-// applyTwoQbit() with no parallelization.
-func (circ *Circuit) applyTwoQbitFallback(operator matrix.Matrix, ireg0, ireg1 int) {
+// applyTwoQubit() with no parallelization.
+func (circ *Circuit) applyTwoQubitFallback(operator matrix.Matrix, ireg0, ireg1 int) {
 	for n := 0; n < (len(circ.State) >> 2); n++ {
 		n0 := ((n >> ireg0) << (ireg0 + 1)) + (n & ((1 << ireg0) - 1))
 		n1 := n0 | (1 << ireg0)
@@ -308,7 +308,7 @@ func (circ *Circuit) applyFallback(operator matrix.Matrix, iregs ...int) {
 			continue
 		}
 		// amp * |basis>
-		// First, extract input qbits from basis
+		// First, extract input qubits from basis
 		// For example, if basis = |0101> and amp = 0, 2 => ibasis = |11>
 		ibasis := 0
 		for idx, val := range iregs {
@@ -387,14 +387,14 @@ func checkControlBit(n int, cs []int) bool {
 	return res == 1
 }
 
-// Applies the control-version of operator to circuit. cs is the control qbits, xs is the input qbits.
+// Applies the control-version of operator to circuit. cs is the control qubits, xs is the input qubits.
 func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 	if !operator.IsUnitary() {
 		panic("Operator must be unitary.")
 	}
 
 	if len(operator) != 1<<len(xs) {
-		panic("Operator size does not match with input qbits.")
+		panic("Operator size does not match with input qubits.")
 	}
 
 	if numbers.Min(cs...) < 0 || numbers.Max(cs...) >= circ.N || numbers.Min(xs...) < 0 || numbers.Max(xs...) >= circ.N {
@@ -407,7 +407,7 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 
 	if circ.N > PARALLEL_THRESHOLD {
 		if len(xs) == 1 {
-			circ.controlOneQbit(operator, cs, xs[0])
+			circ.controlOneQubit(operator, cs, xs[0])
 			return
 		}
 
@@ -417,12 +417,12 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 		}
 	} else {
 		if len(xs) == 1 {
-			circ.controlOneQbitFallback(operator, cs, xs[0])
+			circ.controlOneQubitFallback(operator, cs, xs[0])
 			return
 		}
 
 		if len(xs) == 2 {
-			circ.controlTwoQbitFallback(operator, cs, xs[0], xs[1])
+			circ.controlTwoQubitFallback(operator, cs, xs[0], xs[1])
 			return
 		}
 	}
@@ -433,7 +433,7 @@ func (circ *Circuit) Control(operator matrix.Matrix, cs []int, xs []int) {
 
 // Special case of Apply(), when there is only one input registers.
 // Implemented as in-place swapping.
-func (circ *Circuit) controlOneQbit(operator matrix.Matrix, cs []int, ireg int) {
+func (circ *Circuit) controlOneQubit(operator matrix.Matrix, cs []int, ireg int) {
 	cs_shifted := make([]int, len(cs))
 
 	for i := range cs_shifted {
@@ -471,8 +471,8 @@ func (circ *Circuit) controlOneQbit(operator matrix.Matrix, cs []int, ireg int) 
 	wg.Wait()
 }
 
-// Fallback of controlOneQbit(), with no parallelization.
-func (circ *Circuit) controlOneQbitFallback(operator matrix.Matrix, cs []int, ireg int) {
+// Fallback of controlOneQubit(), with no parallelization.
+func (circ *Circuit) controlOneQubitFallback(operator matrix.Matrix, cs []int, ireg int) {
 	cs_shifted := make([]int, len(cs))
 
 	for i := range cs_shifted {
@@ -555,8 +555,8 @@ func (circ *Circuit) controlTwoQubit(operator matrix.Matrix, cs []int, ireg0, ir
 	wg.Wait()
 }
 
-// Fallback of controlTwoQbit(), with no parallelization.
-func (circ *Circuit) controlTwoQbitFallback(operator matrix.Matrix, cs []int, ireg0, ireg1 int) {
+// Fallback of controlTwoQubit(), with no parallelization.
+func (circ *Circuit) controlTwoQubitFallback(operator matrix.Matrix, cs []int, ireg0, ireg1 int) {
 	if ireg0 == ireg1 {
 		panic("Same input registers.")
 	}
@@ -634,22 +634,22 @@ func (circ *Circuit) controlFallback(operator matrix.Matrix, cs []int, xs []int)
 	copy(circ.State, circ.temp)
 }
 
-// Alias for Control() when control qbit and input qbit are all single.
+// Alias for Control() when control qubit and input qubit are all single.
 func (circ *Circuit) controlSingleSingle(operator matrix.Matrix, c int, x int) {
 	circ.Control(operator, []int{c}, []int{x})
 }
 
-// Applies Control-X gate to circuit. c is control qbit, and x is input qbit.
+// Applies Control-X gate to circuit. c is control qubit, and x is input qubit.
 func (circ *Circuit) CX(c int, x int) {
 	circ.controlSingleSingle(gate.X(), c, x)
 }
 
-// Applies Tofolli gate(CCX gate) to circuit. c1, c2 are control qbits, and x is input qbit.
+// Applies Tofolli gate(CCX gate) to circuit. c1, c2 are control qubits, and x is input qubit.
 func (circ *Circuit) CCX(c1, c2, x int) {
 	circ.Control(gate.X(), []int{c1, c2}, []int{x})
 }
 
-// Swaps two qbits.
+// Swaps two qubits.
 func (circ *Circuit) Swap(x int, y int) {
 	if x < 0 || x >= circ.N || y < 0 || y >= circ.N {
 		panic("Register index out of range.")
@@ -762,22 +762,22 @@ func (circ *Circuit) InvQFT(start, end int) {
 	}
 }
 
-// Measure qbits.
-func (circ *Circuit) Measure(qbits ...int) int {
-	sort.Ints(qbits)
+// Measure qubits.
+func (circ *Circuit) Measure(qubits ...int) int {
+	sort.Ints(qubits)
 
-	if qbits[0] < 0 || qbits[len(qbits)-1] > circ.N-1 {
+	if qubits[0] < 0 || qubits[len(qubits)-1] > circ.N-1 {
 		panic("Register index out of range.")
 	}
 
-	probs := make([]float64, 1<<len(qbits))
+	probs := make([]float64, 1<<len(qubits))
 
 	for n, amp := range circ.State {
 		if amp == 0 {
 			continue
 		}
 		o := 0
-		for i, q := range qbits {
+		for i, q := range qubits {
 			o += ((n >> q) & 1) << i
 		}
 		probs[o] += real(amp)*real(amp) + imag(amp)*imag(amp)
@@ -804,7 +804,7 @@ func (circ *Circuit) Measure(qbits ...int) int {
 			continue
 		}
 
-		for i, q := range qbits {
+		for i, q := range qubits {
 			if (n>>q)&1 != (output>>i)&1 {
 				circ.State[n] = 0
 				goto endloop

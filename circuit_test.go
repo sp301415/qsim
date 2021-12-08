@@ -8,7 +8,7 @@ import (
 	"github.com/sp301415/qsim/math/matrix"
 	"github.com/sp301415/qsim/math/vector"
 	"github.com/sp301415/qsim/quantum/gate"
-	"github.com/sp301415/qsim/quantum/qbit"
+	"github.com/sp301415/qsim/quantum/qubit"
 )
 
 func TestInitC(t *testing.T) {
@@ -26,7 +26,7 @@ func TestSingleX(t *testing.T) {
 	c := qsim.NewCircuit(1)
 	c.X(0)
 
-	q := qbit.NewFromCbit(1, 1)
+	q := qubit.NewFromCbit(1, 1)
 
 	if !c.State.Equals(q) {
 		t.Fail()
@@ -52,7 +52,7 @@ func TestMultiX(t *testing.T) {
 		c.X(i)
 	}
 
-	q1 := qbit.Ones(N)
+	q1 := qubit.Ones(N)
 
 	if !c.State.Equals(q1) {
 		t.Fail()
@@ -62,7 +62,7 @@ func TestMultiX(t *testing.T) {
 		c.X(i)
 	}
 
-	q2 := qbit.Zeros(N)
+	q2 := qubit.Zeros(N)
 
 	if !c.State.Equals(q2) {
 		t.Fail()
@@ -77,7 +77,7 @@ func TestMultiH(t *testing.T) {
 		c.H(i)
 	}
 
-	q1 := qbit.Zeros(N)
+	q1 := qubit.Zeros(N)
 	for i := range q1 {
 		q1[i] = 1
 	}
@@ -91,7 +91,7 @@ func TestMultiH(t *testing.T) {
 		c.H(i)
 	}
 
-	q2 := qbit.Zeros(N)
+	q2 := qubit.Zeros(N)
 
 	if !c.State.Equals(q2) {
 		t.Fail()
@@ -157,13 +157,13 @@ func TestSingleCX(t *testing.T) {
 	c.X(0)
 	c.Control(gate.X(), []int{0}, []int{1})
 
-	if !c.State.Equals(qbit.NewFromCbit(0b11, 2)) {
+	if !c.State.Equals(qubit.NewFromCbit(0b11, 2)) {
 		t.Fail()
 	}
 
 	c.Control(gate.X(), []int{0}, []int{1})
 
-	if !c.State.Equals(qbit.NewFromCbit(0b01, 2)) {
+	if !c.State.Equals(qubit.NewFromCbit(0b01, 2)) {
 		t.Fail()
 	}
 }
@@ -260,7 +260,7 @@ func TestInvQFT(t *testing.T) {
 	c.QFT(0, N)
 	c.InvQFT(0, N)
 
-	if !c.State.Equals(qbit.Zeros(N)) {
+	if !c.State.Equals(qubit.Zeros(N)) {
 		t.Fail()
 	}
 }
@@ -285,7 +285,7 @@ func TestMeasure(t *testing.T) {
 }
 
 func BenchmarkApplywithOptimization(t *testing.B) {
-	// Hadamard gate for every qbit.
+	// Hadamard gate for every qubit.
 
 	N := 6
 	c := qsim.NewCircuit(N)
@@ -300,7 +300,7 @@ func BenchmarkApplywithOptimization(t *testing.B) {
 }
 
 func BenchmarkApplywithOptimizationP(t *testing.B) {
-	// Hadamard gate for every qbit.
+	// Hadamard gate for every qubit.
 
 	N := 12
 	c := qsim.NewCircuit(N)
@@ -315,7 +315,7 @@ func BenchmarkApplywithOptimizationP(t *testing.B) {
 }
 
 func BenchmarkApplywithoutOptimization(t *testing.B) {
-	// Hadamard gate for every qbit.
+	// Hadamard gate for every qubit.
 	// But with Tensor Product.
 
 	N := 6

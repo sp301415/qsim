@@ -33,7 +33,7 @@ func shorInstance(N int, verbose bool) int {
 	n := numbers.BitLength(N)
 
 	if verbose {
-		fmt.Println("[*] Initializing Qbit State...")
+		fmt.Println("[*] Initializing Qubit State...")
 	}
 
 	// Quantum Part.

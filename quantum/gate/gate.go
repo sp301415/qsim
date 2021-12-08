@@ -8,7 +8,7 @@ import (
 	"github.com/sp301415/qsim/math/matrix"
 )
 
-// Returns single-qbit I gate.
+// Returns single-qubit I gate.
 func I() matrix.Matrix {
 	return matrix.New(
 		[][]complex128{
@@ -18,7 +18,7 @@ func I() matrix.Matrix {
 	)
 }
 
-// Returns single-qbit X gate.
+// Returns single-qubit X gate.
 func X() matrix.Matrix {
 	return matrix.New(
 		[][]complex128{
@@ -28,7 +28,7 @@ func X() matrix.Matrix {
 	)
 }
 
-// Returns single-qbit Y gate.
+// Returns single-qubit Y gate.
 func Y() matrix.Matrix {
 	return matrix.New(
 		[][]complex128{
@@ -38,7 +38,7 @@ func Y() matrix.Matrix {
 	)
 }
 
-// Returns single-qbit Z gate.
+// Returns single-qubit Z gate.
 func Z() matrix.Matrix {
 	return matrix.New(
 		[][]complex128{
@@ -48,7 +48,7 @@ func Z() matrix.Matrix {
 	)
 }
 
-// Returns single-qbit H gate.
+// Returns single-qubit H gate.
 func H() matrix.Matrix {
 	return matrix.New(
 		[][]complex128{
@@ -58,7 +58,7 @@ func H() matrix.Matrix {
 	)
 }
 
-// Returns single-qbit P(phi) gate.
+// Returns single-qubit P(phi) gate.
 func P(phi float64) matrix.Matrix {
 	return matrix.New(
 		[][]complex128{
@@ -68,12 +68,12 @@ func P(phi float64) matrix.Matrix {
 	)
 }
 
-// Returns single-qbit S gate. Same as P(pi/2).
+// Returns single-qubit S gate. Same as P(pi/2).
 func S() matrix.Matrix {
 	return P(math.Pi / 2.0)
 }
 
-// Returns single-qbit T gate. Same as P(pi/4).
+// Returns single-qubit T gate. Same as P(pi/4).
 func T() matrix.Matrix {
 	return P(math.Pi / 4.0)
 }

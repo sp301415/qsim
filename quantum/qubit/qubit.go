@@ -1,6 +1,6 @@
-// Package qbit provides functions for quantum state.
-// Qbit is not much different from a vector, though.
-package qbit
+// Package qubit provides functions for quantum state.
+// Qubit is not much different from a vector, though.
+package qubit
 
 import (
 	"github.com/sp301415/qsim/math/numbers"
@@ -37,7 +37,7 @@ func Ones(n int) vector.Vector {
 	return data
 }
 
-// Changes cbit to qbit. l denotes the size of the qbit.
+// Changes cbit to qubit. l denotes the size of the qubit.
 // If l == 0, then it automatically finds the right size.
 func NewFromCbit(n int, l int) vector.Vector {
 	if l == 0 {

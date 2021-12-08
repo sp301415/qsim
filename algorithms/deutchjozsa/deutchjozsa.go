@@ -3,7 +3,7 @@ package deutchjozsa
 import (
 	"github.com/sp301415/qsim"
 	"github.com/sp301415/qsim/math/numbers"
-	"github.com/sp301415/qsim/quantum/qbit"
+	"github.com/sp301415/qsim/quantum/qubit"
 )
 
 func BalancedFunc(x int) int {
@@ -29,7 +29,7 @@ func DeutchJozsa(n int, oracle func(int) int) bool {
 
 	// Prepare n + 1 registers with |0...01>.
 	q := qsim.NewCircuit(n + 1)
-	q.InitQbit(qbit.NewFromCbit(1, n+1))
+	q.InitQubit(qubit.NewFromCbit(1, n+1))
 
 	// Apply H Gate to every register.
 	for i := 0; i < n+1; i++ {

@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	lenPtr := flag.Int("n", 0, "Number of qbits.")
+	lenPtr := flag.Int("n", 0, "Number of qubits.")
 	typePtr := flag.String("type", "", "Type of function. b: balanced, c: constant.")
 
 	flag.Parse()
