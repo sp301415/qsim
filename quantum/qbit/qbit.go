@@ -7,6 +7,10 @@ import (
 	"github.com/sp301415/qsim/math/vector"
 )
 
+func Empty(n int) vector.Vector {
+	return vector.Zeros(1 << n)
+}
+
 // Returns |0>
 func Zero() vector.Vector {
 	return Zeros(1)

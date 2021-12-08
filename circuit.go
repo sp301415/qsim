@@ -265,10 +265,10 @@ func (circ *Circuit) applyTwoQbit(operator matrix.Matrix, ireg0, ireg1 int) {
 				amp10 := circ.State[n10]
 				amp11 := circ.State[n11]
 
-				circ.State[n00] = amp00*operator[0][0] + amp01*operator[0][1] + amp10*operator[0][2] + amp11*operator[0][1]
-				circ.State[n01] = amp00*operator[1][0] + amp01*operator[1][1] + amp10*operator[1][2] + amp11*operator[1][1]
-				circ.State[n10] = amp00*operator[2][0] + amp01*operator[2][1] + amp10*operator[2][2] + amp11*operator[2][1]
-				circ.State[n11] = amp00*operator[3][0] + amp01*operator[3][1] + amp10*operator[3][2] + amp11*operator[3][1]
+				circ.State[n00] = amp00*operator[0][0] + amp01*operator[0][1] + amp10*operator[0][2] + amp11*operator[0][3]
+				circ.State[n01] = amp00*operator[1][0] + amp01*operator[1][1] + amp10*operator[1][2] + amp11*operator[1][3]
+				circ.State[n10] = amp00*operator[2][0] + amp01*operator[2][1] + amp10*operator[2][2] + amp11*operator[2][3]
+				circ.State[n11] = amp00*operator[3][0] + amp01*operator[3][1] + amp10*operator[3][2] + amp11*operator[3][3]
 			}
 		}(i)
 	}
@@ -292,10 +292,10 @@ func (circ *Circuit) applyTwoQbitFallback(operator matrix.Matrix, ireg0, ireg1 i
 		amp10 := circ.State[n10]
 		amp11 := circ.State[n11]
 
-		circ.State[n00] = amp00*operator[0][0] + amp01*operator[0][1] + amp10*operator[0][2] + amp11*operator[0][1]
-		circ.State[n01] = amp00*operator[1][0] + amp01*operator[1][1] + amp10*operator[1][2] + amp11*operator[1][1]
-		circ.State[n10] = amp00*operator[2][0] + amp01*operator[2][1] + amp10*operator[2][2] + amp11*operator[2][1]
-		circ.State[n11] = amp00*operator[3][0] + amp01*operator[3][1] + amp10*operator[3][2] + amp11*operator[3][1]
+		circ.State[n00] = amp00*operator[0][0] + amp01*operator[0][1] + amp10*operator[0][2] + amp11*operator[0][3]
+		circ.State[n01] = amp00*operator[1][0] + amp01*operator[1][1] + amp10*operator[1][2] + amp11*operator[1][3]
+		circ.State[n10] = amp00*operator[2][0] + amp01*operator[2][1] + amp10*operator[2][2] + amp11*operator[2][3]
+		circ.State[n11] = amp00*operator[3][0] + amp01*operator[3][1] + amp10*operator[3][2] + amp11*operator[3][3]
 	}
 }
 
@@ -315,16 +315,15 @@ func (circ *Circuit) applyFallback(operator matrix.Matrix, iregs ...int) {
 			// Extract val-th bit from basis, plug it in to idx-th bit of ibasis.
 			ibasis += ((basis >> val) & 1) << idx
 		}
-		// Generate new qbit from x, apply operator to it.
-		newibasis_q := qbit.NewFromCbit(ibasis, len(iregs)).Apply(operator)
-
-		for newibasis, newamp := range newibasis_q {
-			// U*|ibasis> = sum newamp * |newibasis>
+		// Apply operator to ibasis.
+		// Note that ibasis is just a basis state.
+		// This means that applying is taking columns from operator.
+		for newibasis := 0; newibasis < (1 << len(iregs)); newibasis++ {
+			newamp := operator[newibasis][ibasis]
 			if newamp == 0 {
 				continue
 			}
-			// Make newbasis by merging newibasis to basis.
-			// Extract idx-th bit from newibasis, plug it in to val-th bit of basis.
+
 			newbasis := basis
 			for idx, val := range iregs {
 				bit := (newibasis >> idx) & 1
@@ -545,10 +544,10 @@ func (circ *Circuit) controlTwoQubit(operator matrix.Matrix, cs []int, ireg0, ir
 				amp10 := circ.State[n10]
 				amp11 := circ.State[n11]
 
-				circ.State[n00] = amp00*operator[0][0] + amp01*operator[0][1] + amp10*operator[0][2] + amp11*operator[0][1]
-				circ.State[n01] = amp00*operator[1][0] + amp01*operator[1][1] + amp10*operator[1][2] + amp11*operator[1][1]
-				circ.State[n10] = amp00*operator[2][0] + amp01*operator[2][1] + amp10*operator[2][2] + amp11*operator[2][1]
-				circ.State[n11] = amp00*operator[3][0] + amp01*operator[3][1] + amp10*operator[3][2] + amp11*operator[3][1]
+				circ.State[n00] = amp00*operator[0][0] + amp01*operator[0][1] + amp10*operator[0][2] + amp11*operator[0][3]
+				circ.State[n01] = amp00*operator[1][0] + amp01*operator[1][1] + amp10*operator[1][2] + amp11*operator[1][3]
+				circ.State[n10] = amp00*operator[2][0] + amp01*operator[2][1] + amp10*operator[2][2] + amp11*operator[2][3]
+				circ.State[n11] = amp00*operator[3][0] + amp01*operator[3][1] + amp10*operator[3][2] + amp11*operator[3][3]
 			}
 		}(i)
 	}
@@ -592,10 +591,10 @@ func (circ *Circuit) controlTwoQbitFallback(operator matrix.Matrix, cs []int, ir
 		amp10 := circ.State[n10]
 		amp11 := circ.State[n11]
 
-		circ.State[n00] = amp00*operator[0][0] + amp01*operator[0][1] + amp10*operator[0][2] + amp11*operator[0][1]
-		circ.State[n01] = amp00*operator[1][0] + amp01*operator[1][1] + amp10*operator[1][2] + amp11*operator[1][1]
-		circ.State[n10] = amp00*operator[2][0] + amp01*operator[2][1] + amp10*operator[2][2] + amp11*operator[2][1]
-		circ.State[n11] = amp00*operator[3][0] + amp01*operator[3][1] + amp10*operator[3][2] + amp11*operator[3][1]
+		circ.State[n00] = amp00*operator[0][0] + amp01*operator[0][1] + amp10*operator[0][2] + amp11*operator[0][3]
+		circ.State[n01] = amp00*operator[1][0] + amp01*operator[1][1] + amp10*operator[1][2] + amp11*operator[1][3]
+		circ.State[n10] = amp00*operator[2][0] + amp01*operator[2][1] + amp10*operator[2][2] + amp11*operator[2][3]
+		circ.State[n11] = amp00*operator[3][0] + amp01*operator[3][1] + amp10*operator[3][2] + amp11*operator[3][3]
 	}
 }
 
@@ -616,12 +615,13 @@ func (circ *Circuit) controlFallback(operator matrix.Matrix, cs []int, xs []int)
 		for idx, val := range xs {
 			ibasis += ((basis >> val) & 1) << idx
 		}
-		newibasis_q := qbit.NewFromCbit(ibasis, len(xs)).Apply(operator)
 
-		for newibasis, newamp := range newibasis_q {
+		for newibasis := 0; newibasis < (1 << len(xs)); newibasis++ {
+			newamp := operator[newibasis][ibasis]
 			if newamp == 0 {
 				continue
 			}
+
 			newbasis := basis
 			for idx, val := range xs {
 				bit := (newibasis >> idx) & 1
