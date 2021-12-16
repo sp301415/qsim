@@ -41,7 +41,7 @@ func NewCircuit(nbits int) *Circuit {
 	return &Circuit{
 		State:  qubit.NewBit(0, nbits),
 		temp:   qubit.NewQubit(vec.NewVec(1 << nbits)),
-		Option: Options{GOROUTINE_CNT: runtime.GOMAXPROCS(0), PARALLEL_THRESHOLD: 8},
+		Option: Options{GOROUTINE_CNT: runtime.GOMAXPROCS(0), PARALLEL_THRESHOLD: 10},
 	}
 }
 
@@ -733,7 +733,7 @@ func (c *Circuit) InvQFT(start, end int) {
 	}
 }
 
-// Measure qubits.
+// Measure measures qubits.
 func (c *Circuit) Measure(iregs ...int) int {
 	iregs_s := make([]int, len(iregs))
 	copy(iregs_s, iregs)

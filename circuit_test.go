@@ -279,65 +279,65 @@ func TestMeasure(t *testing.T) {
 	}
 }
 
-func BenchmarkApplywithOptimization(t *testing.B) {
-	// Hadamard gate for every qubit.
-
-	N := 6
-	c := qsim.NewCircuit(N)
-
-	for i := 0; i < N; i++ {
-		c.H(i)
-	}
-
-	for i := N - 1; i >= 0; i-- {
-		c.H(i)
-	}
-}
-
-func BenchmarkApplywithOptimizationP(t *testing.B) {
-	// Hadamard gate for every qubit.
-
-	N := 12
-	c := qsim.NewCircuit(N)
-
-	for i := 0; i < N; i++ {
-		c.H(i)
-	}
-
-	for i := N - 1; i >= 0; i-- {
-		c.H(i)
-	}
-}
-
-func BenchmarkApplywithoutOptimization(t *testing.B) {
-	// Hadamard gate for every qubit.
-	// But with Tensor Product.
-
-	N := 6
-	c := qsim.NewCircuit(N)
-	Hs := gate.H()
-	regs := make([]int, N)
-
-	for i := 0; i < N; i++ {
-		regs[i] = i
-
-		if i > 0 {
-			Hs = Hs.Tensor(gate.H())
-		}
-	}
-
-	c.Apply(Hs, regs...)
-	c.Apply(Hs, regs...)
-}
-func BenchmarkMeasurement(t *testing.B) {
-	N := 20
+func BenchmarkTensorApply(t *testing.B) {
+	N := 10
+	H := gate.H()
+	X := gate.X()
+	Z := gate.Z()
+	T := gate.T()
 
 	c := qsim.NewCircuit(N)
 	iregs := make([]int, N)
-
-	for i := range iregs {
+	for i := 1; i < N; i++ {
+		H = H.Tensor(gate.H())
+		X = X.Tensor(gate.X())
+		Z = Z.Tensor(gate.Z())
+		T = T.Tensor(gate.T())
 		iregs[i] = i
+	}
+
+	c.Apply(H, iregs...)
+	c.Apply(X, iregs...)
+	c.Apply(Z, iregs...)
+	c.Apply(T, iregs...)
+}
+
+func BenchmarkApply(t *testing.B) {
+	N := 10
+
+	c := qsim.NewCircuit(N)
+	c.Option.PARALLEL_THRESHOLD = 20
+
+	for i := 0; i < N; i++ {
 		c.H(i)
 	}
-	c.Measure(iregs...)
+	for i := 0; i < N; i++ {
+		c.X(i)
+	}
+	for i := 0; i < N; i++ {
+		c.Z(i)
+	}
+	for i := 0; i < N; i++ {
+		c.T(i)
+	}
+}
+
+func BenchmarkApplyParallel(t *testing.B) {
+	N := 10
+
+	c := qsim.NewCircuit(N)
+	c.Option.PARALLEL_THRESHOLD = 5
+
+	for i := 0; i < N; i++ {
+		c.H(i)
+	}
+	for i := 0; i < N; i++ {
+		c.X(i)
+	}
+	for i := 0; i < N; i++ {
+		c.Z(i)
+	}
+	for i := 0; i < N; i++ {
+		c.T(i)
+	}
 }
