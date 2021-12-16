@@ -33,6 +33,10 @@ func (c *Circuit) cleartemp() {
 
 // NewCircuit initializes circuit with nbits size.
 func NewCircuit(nbits int) *Circuit {
+	if nbits < 0 || nbits > 32 {
+		panic("Unsupported amount of qubits. Currently qsim supports up to 32 qubits.")
+	}
+
 	return &Circuit{
 		State:  qubit.NewBit(0, nbits),
 		temp:   qubit.NewQubit(vec.NewVec(1 << nbits)),
