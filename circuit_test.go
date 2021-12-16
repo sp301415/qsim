@@ -1,21 +1,21 @@
 package qsim_test
 
 import (
+	"math"
 	"math/rand"
 	"testing"
 
 	"github.com/sp301415/qsim"
-	"github.com/sp301415/qsim/math/matrix"
-	"github.com/sp301415/qsim/math/vector"
+	"github.com/sp301415/qsim/math/vec"
 	"github.com/sp301415/qsim/quantum/gate"
 	"github.com/sp301415/qsim/quantum/qubit"
 )
 
 func TestInitC(t *testing.T) {
 	c := qsim.NewCircuit(2)
-	c.InitCbit(3)
+	c.SetBit(3)
 
-	q := vector.New([]complex128{0, 0, 0, 1})
+	q := qubit.NewQubit(vec.NewVecSlice([]complex128{0, 0, 0, 1}))
 
 	if !c.State.Equals(q) {
 		t.Fail()
@@ -26,7 +26,7 @@ func TestSingleX(t *testing.T) {
 	c := qsim.NewCircuit(1)
 	c.X(0)
 
-	q := qubit.NewFromCbit(1, 1)
+	q := qubit.NewBit(1, 1)
 
 	if !c.State.Equals(q) {
 		t.Fail()
@@ -37,7 +37,7 @@ func TestSingleH(t *testing.T) {
 	c := qsim.NewCircuit(1)
 	c.H(0)
 
-	q := vector.New([]complex128{1, 1}).Normalize()
+	q := qubit.NewQubit(vec.NewVecSlice([]complex128{math.Sqrt2 / 2.0, math.Sqrt2 / 2.0}))
 
 	if !c.State.Equals(q) {
 		t.Fail()
@@ -52,7 +52,7 @@ func TestMultiX(t *testing.T) {
 		c.X(i)
 	}
 
-	q1 := qubit.Ones(N)
+	q1 := qubit.NewBit(1<<N-1, N)
 
 	if !c.State.Equals(q1) {
 		t.Fail()
@@ -62,7 +62,7 @@ func TestMultiX(t *testing.T) {
 		c.X(i)
 	}
 
-	q2 := qubit.Zeros(N)
+	q2 := qubit.NewBit(0, N)
 
 	if !c.State.Equals(q2) {
 		t.Fail()
@@ -77,11 +77,10 @@ func TestMultiH(t *testing.T) {
 		c.H(i)
 	}
 
-	q1 := qubit.Zeros(N)
+	q1 := qubit.NewBit(0, N)
 	for i := range q1 {
-		q1[i] = 1
+		q1[i] = complex(1.0/math.Pow(2.0, float64(N)/2.0), 0)
 	}
-	q1 = q1.Normalize()
 
 	if !c.State.Equals(q1) {
 		t.Fail()
@@ -91,7 +90,7 @@ func TestMultiH(t *testing.T) {
 		c.H(i)
 	}
 
-	q2 := qubit.Zeros(N)
+	q2 := qubit.NewBit(0, N)
 
 	if !c.State.Equals(q2) {
 		t.Fail()
@@ -142,10 +141,9 @@ func TestOracle(t *testing.T) {
 	c.CX(0, 1)
 	c.ApplyOracle(func(_ int) int { return 1 }, []int{1}, []int{0})
 
-	q := vector.Zeros(1 << 2)
-	q[0b01] = 1
-	q[0b10] = 1
-	q = q.Normalize()
+	q := qubit.NewQubit(vec.NewVec(1 << 2))
+	q[0b01] = math.Sqrt2 / 2.0
+	q[0b10] = math.Sqrt2 / 2.0
 
 	if !c.State.Equals(q) {
 		t.Fail()
@@ -157,13 +155,13 @@ func TestSingleCX(t *testing.T) {
 	c.X(0)
 	c.Control(gate.X(), []int{0}, []int{1})
 
-	if !c.State.Equals(qubit.NewFromCbit(0b11, 2)) {
+	if !c.State.Equals(qubit.NewBit(0b11, 2)) {
 		t.Fail()
 	}
 
 	c.Control(gate.X(), []int{0}, []int{1})
 
-	if !c.State.Equals(qubit.NewFromCbit(0b01, 2)) {
+	if !c.State.Equals(qubit.NewBit(0b01, 2)) {
 		t.Fail()
 	}
 }
@@ -189,10 +187,9 @@ func TestMultiCCX(t *testing.T) {
 	c.H(0)
 	c.CCX(0, 1, 2)
 
-	q := vector.Zeros(1 << 3)
-	q[0b000] = 1
-	q[0b101] = 1
-	q = q.Normalize()
+	q := qubit.NewQubit(vec.NewVec(1 << 3))
+	q[0b000] = math.Sqrt2 / 2.0
+	q[0b101] = math.Sqrt2 / 2.0
 
 	if !c.State.Equals(q) {
 		t.Fail()
@@ -203,15 +200,13 @@ func TestCHH(t *testing.T) {
 	c := qsim.NewCircuit(3)
 
 	c.X(0)
-	c.Control(matrix.Tensor(gate.H(), gate.H()), []int{0}, []int{1, 2})
+	c.Control(gate.H().Tensor(gate.H()), []int{0}, []int{1, 2})
 
-	q := vector.Zeros(1 << 3)
-	q[0b001] = 1
-	q[0b011] = 1
-	q[0b101] = 1
-	q[0b111] = 1
-
-	q = q.Normalize()
+	q := qubit.NewQubit(vec.NewVec(1 << 3))
+	q[0b001] = 0.5
+	q[0b011] = 0.5
+	q[0b101] = 0.5
+	q[0b111] = 0.5
 
 	if !c.State.Equals(q) {
 		t.Fail()
@@ -246,7 +241,7 @@ func TestQFT(t *testing.T) {
 	c.X(0)
 	c.QFT(0, 2)
 
-	q := vector.New([]complex128{0.5, 0.5i, -0.5, -0.5i})
+	q := qubit.NewQubit([]complex128{0.5, 0.5i, -0.5, -0.5i})
 
 	if !c.State.Equals(q) {
 		t.Fail()
@@ -260,7 +255,7 @@ func TestInvQFT(t *testing.T) {
 	c.QFT(0, N)
 	c.InvQFT(0, N)
 
-	if !c.State.Equals(qubit.Zeros(N)) {
+	if !c.State.Equals(qubit.NewBit(0, N)) {
 		t.Fail()
 	}
 }
@@ -270,7 +265,7 @@ func TestMeasure(t *testing.T) {
 	M := rand.Intn(1 << N)
 
 	c := qsim.NewCircuit(N)
-	c.InitCbit(M)
+	c.SetBit(M)
 
 	regs := make([]int, N)
 	for i := range regs {

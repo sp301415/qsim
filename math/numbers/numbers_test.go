@@ -30,7 +30,7 @@ func TestBinLen(t *testing.T) {
 	n := 1545
 	l := len(fmt.Sprintf("%b", n))
 
-	if l != numbers.BitLength(n) {
+	if l != numbers.BitLen(n) {
 		t.Fail()
 	}
 }

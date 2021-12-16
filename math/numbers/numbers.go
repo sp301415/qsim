@@ -1,8 +1,7 @@
-// Package numbers provides various integer algorithms.
-// Frankly, Go should already have them. :(
+// Package numbers provides various functions for integers.
 package numbers
 
-// Returns power of two int, a ** b.
+// Pow returns a ** b.
 func Pow(a, b int) int {
 	res := 1
 
@@ -17,8 +16,13 @@ func Pow(a, b int) int {
 	return res
 }
 
-// Returns modulo power of two int, a ** b % c.
+// PowMod returns a ** b mod c.
+// Panics if c < 0.
 func PowMod(a, b, c int) int {
+	if c < 0 {
+		panic("Negative modulo not allowed.")
+	}
+
 	res := 1
 	a %= c
 
@@ -33,7 +37,7 @@ func PowMod(a, b, c int) int {
 	return res
 }
 
-// Returns GCD of two int.
+// GCD returns greatest common divisor of a and b.
 func GCD(a, b int) int {
 	for b != 0 {
 		a, b = b, a%b
@@ -41,8 +45,13 @@ func GCD(a, b int) int {
 	return a
 }
 
-// Returns binary length of number.
-func BitLength(n int) int {
+// BitLen returns binary length of n.
+// If n == 0, it returns 1. If n < 0, it panics.
+func BitLen(n int) int {
+	if n < 0 {
+		panic("Negative integer not allowed.")
+	}
+
 	if n == 0 {
 		return 1
 	}
@@ -56,8 +65,12 @@ func BitLength(n int) int {
 	return len
 }
 
-// Returns the smallest number.
+// Min returns the smallest integer.
 func Min(ns ...int) int {
+	if len(ns) == 0 {
+		panic("At least one argument is required.")
+	}
+
 	if len(ns) == 1 {
 		return ns[0]
 	}
@@ -73,8 +86,12 @@ func Min(ns ...int) int {
 	return min
 }
 
-// Returns the largest number.
+// Max returns the largest integer.
 func Max(ns ...int) int {
+	if len(ns) == 0 {
+		panic("At least one argument is required.")
+	}
+
 	if len(ns) == 1 {
 		return ns[0]
 	}

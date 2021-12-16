@@ -3,7 +3,7 @@ package fraction_test
 import (
 	"testing"
 
-	"github.com/sp301415/qsim/math/fraction"
+	"github.com/sp301415/qsim/algorithms/shor/fraction"
 )
 
 func TestContinuedFraction(t *testing.T) {

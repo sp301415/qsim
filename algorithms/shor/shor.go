@@ -5,7 +5,7 @@ import (
 	"math/rand"
 
 	"github.com/sp301415/qsim"
-	"github.com/sp301415/qsim/math/fraction"
+	"github.com/sp301415/qsim/algorithms/shor/fraction"
 	"github.com/sp301415/qsim/math/numbers"
 )
 
@@ -30,7 +30,7 @@ func shorInstance(N int, verbose bool) int {
 		fmt.Printf("[+] Using a: %d\n", a)
 	}
 
-	n := numbers.BitLength(N)
+	n := numbers.BitLen(N)
 
 	if verbose {
 		fmt.Println("[*] Initializing Qubit State...")
@@ -38,7 +38,7 @@ func shorInstance(N int, verbose bool) int {
 
 	// Quantum Part.
 	q := qsim.NewCircuit(3 * n)
-	q.InitCbit((1 << n) - 1)
+	q.SetBit((1 << n) - 1)
 
 	iregs := make([]int, 2*n)
 	oregs := make([]int, n)
