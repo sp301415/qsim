@@ -161,17 +161,19 @@ func (c *Circuit) applyOne(op gate.Gate, i int) {
 
 // applyOneParallel applies one qubit gate with parallelization.
 func (c *Circuit) applyOneParallel(op gate.Gate, i int) {
-	chunkcnt := c.Option.GOROUTINE_CNT
+	jobsize := c.State.Dim() / 2
+	chunksize := jobsize / c.Option.GOROUTINE_CNT
+
 	wg := &sync.WaitGroup{}
-	wg.Add(chunkcnt)
+	wg.Add(c.Option.GOROUTINE_CNT)
 
 	lo := 1 << i
 
-	for n := 0; n < chunkcnt; n++ {
+	for n := 0; n < jobsize; n += chunksize {
 		go func(start int) {
 			defer wg.Done()
 
-			for n := start; n < c.State.Dim()/2; n += chunkcnt {
+			for n := start; n < chunksize+start; n++ {
 				n0 := ((n >> i) << (i + 1)) + (n % lo)
 				n1 := n0 | lo
 
@@ -222,18 +224,20 @@ func (c *Circuit) applyTwo(op gate.Gate, i0, i1 int) {
 
 // applyTwoParallel applies two qubit gate with parallelizaition.
 func (c *Circuit) applyTwoParallel(op gate.Gate, i0, i1 int) {
-	chunkcnt := c.Option.GOROUTINE_CNT
+	jobsize := c.State.Dim() / 4
+	chunksize := jobsize / c.Option.GOROUTINE_CNT
+
 	wg := &sync.WaitGroup{}
-	wg.Add(chunkcnt)
+	wg.Add(c.Option.GOROUTINE_CNT)
 
 	lo0 := 1 << i0
 	lo1 := 1 << i1
 
-	for n := 0; n < chunkcnt; n++ {
+	for n := 0; n < jobsize; n += chunksize {
 		go func(start int) {
 			defer wg.Done()
 
-			for n := start; n < c.State.Dim()/4; n += chunkcnt {
+			for n := start; n < chunksize+start; n++ {
 				n0 := ((n >> i0) << (i0 + 1)) + (n % lo0)
 
 				n00 := ((n0 >> i1) << (i1 + 1)) + (n % lo1)
@@ -340,11 +344,13 @@ func (c *Circuit) ApplyOracle(oracle func(int) int, iregs []int, oregs []int) {
 
 // applyOracleGeneral applies oracle as ApplyOracle with no parallelization.
 func (c *Circuit) applyOracleParallel(oracle func(int) int, iregs []int, oregs []int) {
-	chunksize := c.Option.GOROUTINE_CNT
-	wg := &sync.WaitGroup{}
+	jobsize := c.State.Dim()
+	chunksize := jobsize / c.Option.GOROUTINE_CNT
 
-	for n := 0; n < c.State.Dim(); n += chunksize {
-		wg.Add(1)
+	wg := &sync.WaitGroup{}
+	wg.Add(c.Option.GOROUTINE_CNT)
+
+	for n := 0; n < jobsize; n += chunksize {
 		go func(start int) {
 			defer wg.Done()
 
@@ -456,16 +462,19 @@ func (c *Circuit) controlOne(op gate.Gate, cregs []int, i int) {
 // controlOneParallel applies one qubit controlled gate with parallelization.
 func (c *Circuit) controlOneParallel(op gate.Gate, cregs []int, i int) {
 	chunkcnt := c.Option.GOROUTINE_CNT
+	jobsize := c.State.Dim() / 2
+	chunksize := jobsize / chunkcnt
+
 	wg := &sync.WaitGroup{}
 	wg.Add(chunkcnt)
 
 	lo := 1 << i
 
-	for n := 0; n < chunkcnt; n++ {
+	for n := 0; n < jobsize; n += chunksize {
 		go func(start int) {
 			defer wg.Done()
 
-			for n := start; n < c.State.Dim()/2; n += chunkcnt {
+			for n := start; n < chunksize+start; n++ {
 				n0 := ((n >> i) << (i + 1)) + (n % lo)
 				n1 := n0 | lo
 
@@ -520,18 +529,20 @@ func (c *Circuit) controlTwo(op gate.Gate, cregs []int, i0, i1 int) {
 
 // controlTwoParallel applies two qubit controlled gate. with parallelizaition.
 func (c *Circuit) controlTwoParallel(op gate.Gate, cregs []int, i0, i1 int) {
-	chunkcnt := c.Option.GOROUTINE_CNT
+	jobsize := c.State.Dim() / 4
+	chunksize := jobsize / c.Option.GOROUTINE_CNT
+
 	wg := &sync.WaitGroup{}
-	wg.Add(chunkcnt)
+	wg.Add(c.Option.GOROUTINE_CNT)
 
 	lo0 := 1 << i0
 	lo1 := 1 << i1
 
-	for n := 0; n < chunkcnt; n++ {
+	for n := 0; n < jobsize; n += chunksize {
 		go func(start int) {
 			defer wg.Done()
 
-			for n := start; n < c.State.Dim()/4; n += chunkcnt {
+			for n := start; n < chunksize+start; n++ {
 				n0 := ((n >> i0) << (i0 + 1)) + (n % lo0)
 
 				n00 := ((n0 >> i1) << (i1 + 1)) + (n % lo1)
@@ -632,18 +643,20 @@ func (c *Circuit) Swap(i0, i1 int) {
 
 // swapParallel swaps to qubit with parallelization.
 func (c *Circuit) swapParallel(i0, i1 int) {
-	chunksize := c.Option.GOROUTINE_CNT
+	jobsize := c.State.Dim() / 4
+	chunksize := jobsize / c.Option.GOROUTINE_CNT
+
 	wg := &sync.WaitGroup{}
+	wg.Add(c.Option.GOROUTINE_CNT)
 
 	lo0 := 1 << i0
 	lo1 := 1 << i1
 
-	for n := 0; n < c.State.Dim()/4; n += chunksize {
-		wg.Add(1)
+	for n := 0; n < jobsize; n += chunksize {
 		go func(start int) {
 			defer wg.Done()
 
-			for n := start; n < start+chunksize; n++ {
+			for n := start; n < chunksize+start; n++ {
 				n0 := ((n >> i0) << (i0 + 1)) + (n % lo0)
 				n00 := ((n0 >> i1) << (i1 + 1)) + (n % lo1)
 
