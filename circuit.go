@@ -15,7 +15,7 @@ import (
 
 // Options for a circuit.
 type Options struct {
-	GOROUTINE_CNT      int // Number of goroutines to execute. Defaults to 8.
+	GOROUTINE_CNT      int // Number of goroutines to execute. Defaults to GOMAXPROCS.
 	PARALLEL_THRESHOLD int // Number of qubits to use parallelization. Defaults to 8.
 }
 
@@ -174,11 +174,18 @@ func (c *Circuit) applyOneParallel(op gate.Gate, i int) {
 
 	lo := 1 << i
 
-	for n := 0; n < jobsize; n += chunksize {
-		go func(start int) {
+	for n := 0; n < c.Option.GOROUTINE_CNT; n++ {
+		start := n * chunksize
+		end := start + chunksize
+
+		if end > jobsize {
+			end = jobsize
+		}
+
+		go func(start, end int) {
 			defer wg.Done()
 
-			for n := start; n < chunksize+start; n++ {
+			for n := start; n < end; n++ {
 				n0 := ((n >> i) << (i + 1)) + (n % lo)
 				n1 := n0 | lo
 
@@ -188,7 +195,7 @@ func (c *Circuit) applyOneParallel(op gate.Gate, i int) {
 				c.State[n0] = a0*op[0][0] + a1*op[0][1]
 				c.State[n1] = a0*op[1][0] + a1*op[1][1]
 			}
-		}(n)
+		}(start, end)
 	}
 
 	wg.Wait()
@@ -238,11 +245,18 @@ func (c *Circuit) applyTwoParallel(op gate.Gate, i0, i1 int) {
 	lo0 := 1 << i0
 	lo1 := 1 << i1
 
-	for n := 0; n < jobsize; n += chunksize {
-		go func(start int) {
+	for n := 0; n < c.Option.GOROUTINE_CNT; n++ {
+		start := n * chunksize
+		end := start + chunksize
+
+		if end > jobsize {
+			end = jobsize
+		}
+
+		go func(start, end int) {
 			defer wg.Done()
 
-			for n := start; n < chunksize+start; n++ {
+			for n := start; n < end; n++ {
 				n0 := ((n >> i0) << (i0 + 1)) + (n % lo0)
 
 				n00 := ((n0 >> i1) << (i1 + 1)) + (n % lo1)
@@ -260,7 +274,7 @@ func (c *Circuit) applyTwoParallel(op gate.Gate, i0, i1 int) {
 				c.State[n10] = a00*op[2][0] + a01*op[2][1] + a10*op[2][2] + a11*op[2][3]
 				c.State[n11] = a00*op[3][0] + a01*op[3][1] + a10*op[3][2] + a11*op[3][3]
 			}
-		}(n)
+		}(start, end)
 	}
 
 	wg.Wait()
@@ -355,11 +369,18 @@ func (c *Circuit) applyOracleParallel(oracle func(int) int, iregs []int, oregs [
 	wg := &sync.WaitGroup{}
 	wg.Add(c.Option.GOROUTINE_CNT)
 
-	for n := 0; n < jobsize; n += chunksize {
-		go func(start int) {
+	for n := 0; n < c.Option.GOROUTINE_CNT; n++ {
+		start := n * chunksize
+		end := start + chunksize
+
+		if end > jobsize {
+			end = jobsize
+		}
+
+		go func(start, end int) {
 			defer wg.Done()
 
-			for basis := start; basis < start+chunksize; basis++ {
+			for basis := start; basis < end; basis++ {
 				amp := c.State[basis]
 				if amp == 0 {
 					continue
@@ -380,7 +401,7 @@ func (c *Circuit) applyOracleParallel(oracle func(int) int, iregs []int, oregs [
 
 				c.temp[newbasis] = amp
 			}
-		}(n)
+		}(start, end)
 	}
 
 	wg.Wait()
@@ -475,11 +496,18 @@ func (c *Circuit) controlOneParallel(op gate.Gate, cregs []int, i int) {
 
 	lo := 1 << i
 
-	for n := 0; n < jobsize; n += chunksize {
-		go func(start int) {
+	for n := 0; n < c.Option.GOROUTINE_CNT; n++ {
+		start := n * chunksize
+		end := start + chunksize
+
+		if end > jobsize {
+			end = jobsize
+		}
+
+		go func(start, end int) {
 			defer wg.Done()
 
-			for n := start; n < chunksize+start; n++ {
+			for n := start; n < end; n++ {
 				n0 := ((n >> i) << (i + 1)) + (n % lo)
 				n1 := n0 | lo
 
@@ -493,7 +521,7 @@ func (c *Circuit) controlOneParallel(op gate.Gate, cregs []int, i int) {
 				c.State[n0] = a0*op[0][0] + a1*op[0][1]
 				c.State[n1] = a0*op[1][0] + a1*op[1][1]
 			}
-		}(n)
+		}(start, end)
 	}
 
 	wg.Wait()
@@ -543,11 +571,18 @@ func (c *Circuit) controlTwoParallel(op gate.Gate, cregs []int, i0, i1 int) {
 	lo0 := 1 << i0
 	lo1 := 1 << i1
 
-	for n := 0; n < jobsize; n += chunksize {
-		go func(start int) {
+	for n := 0; n < c.Option.GOROUTINE_CNT; n++ {
+		start := n * chunksize
+		end := start + chunksize
+
+		if end > jobsize {
+			end = jobsize
+		}
+
+		go func(start, end int) {
 			defer wg.Done()
 
-			for n := start; n < chunksize+start; n++ {
+			for n := start; n < end; n++ {
 				n0 := ((n >> i0) << (i0 + 1)) + (n % lo0)
 
 				n00 := ((n0 >> i1) << (i1 + 1)) + (n % lo1)
@@ -569,7 +604,7 @@ func (c *Circuit) controlTwoParallel(op gate.Gate, cregs []int, i0, i1 int) {
 				c.State[n10] = a00*op[2][0] + a01*op[2][1] + a10*op[2][2] + a11*op[2][3]
 				c.State[n11] = a00*op[3][0] + a01*op[3][1] + a10*op[3][2] + a11*op[3][3]
 			}
-		}(n)
+		}(start, end)
 	}
 
 	wg.Wait()
@@ -657,11 +692,18 @@ func (c *Circuit) swapParallel(i0, i1 int) {
 	lo0 := 1 << i0
 	lo1 := 1 << i1
 
-	for n := 0; n < jobsize; n += chunksize {
-		go func(start int) {
+	for n := 0; n < c.Option.GOROUTINE_CNT; n++ {
+		start := n * chunksize
+		end := start + chunksize
+
+		if end > jobsize {
+			end = jobsize
+		}
+
+		go func(start, end int) {
 			defer wg.Done()
 
-			for n := start; n < chunksize+start; n++ {
+			for n := start; n < end; n++ {
 				n0 := ((n >> i0) << (i0 + 1)) + (n % lo0)
 				n00 := ((n0 >> i1) << (i1 + 1)) + (n % lo1)
 
@@ -670,7 +712,7 @@ func (c *Circuit) swapParallel(i0, i1 int) {
 
 				c.State[n01], c.State[n10] = c.State[n10], c.State[n01]
 			}
-		}(n)
+		}(start, end)
 	}
 
 	wg.Wait()
