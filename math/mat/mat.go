@@ -4,7 +4,6 @@ package mat
 import (
 	"fmt"
 	"math/cmplx"
-	"strings"
 
 	"github.com/sp301415/qsim/math/vec"
 )
@@ -308,5 +307,5 @@ func (m Mat) String() string {
 		r += fmt.Sprintln(row)
 	}
 
-	return strings.TrimSpace(r)
+	return r
 }

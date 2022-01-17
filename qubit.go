@@ -3,7 +3,6 @@ package qsim
 import (
 	"fmt"
 	"math/cmplx"
-	"strings"
 
 	"github.com/sp301415/qsim/math/numbers"
 	"github.com/sp301415/qsim/math/vec"
@@ -86,5 +85,5 @@ func (q Qubit) String() string {
 
 		r += fmt.Sprintf("|%0*b>: %f\n", q.Size(), n, a)
 	}
-	return strings.TrimSpace(r)
+	return r
 }

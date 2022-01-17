@@ -836,7 +836,7 @@ func (c *Circuit) Measure(iregs ...int) int {
 	return output
 }
 
-// String implements Stringer interface.
+// String implements the Stringer interface.
 func (q Circuit) String() string {
 	return q.state.String()
 }

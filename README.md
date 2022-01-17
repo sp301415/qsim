@@ -15,7 +15,7 @@ c := qsim.NewCircuit(2)
 c.H(0)
 c.CX(0, 1)
 
-fmt.Println(c.State)
+fmt.Println(c)
 // Output:
 // |00>: (0.707107+0.000000i)
 // |11>: (0.707107+0.000000i)
@@ -23,7 +23,7 @@ fmt.Println(c.State)
 // Measure the first qubit.
 c.Measure(0)
 
-fmt.Println(c.State)
+fmt.Println(c)
 // Output:
 // |11>: (1.000000+0.000000i)
 ```
