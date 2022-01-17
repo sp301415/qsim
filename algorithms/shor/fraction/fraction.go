@@ -1,4 +1,4 @@
-// Fraction provide packages for fraction. (Frankly just for Shor)
+// Fraction provide packages for fraction.
 package fraction
 
 import (

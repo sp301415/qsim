@@ -1,4 +1,4 @@
-package qubit
+package qsim
 
 import (
 	"fmt"
@@ -9,7 +9,10 @@ import (
 	"github.com/sp301415/qsim/math/vec"
 )
 
-type Qubit vec.Vec
+type Qubit struct {
+	data vec.Vec
+	size int
+}
 
 // NewQubit allocates new qubit from given vector. This does not copy vector.
 // NOTE: This checks whether length of v is power of 2. Direct casting might lead to unexpected behavior.
@@ -18,7 +21,7 @@ func NewQubit(v vec.Vec) Qubit {
 		panic("Vector size must be power of two.")
 	}
 
-	return Qubit(v)
+	return Qubit{data: v, size: numbers.BitLen(v.Dim()) - 1}
 }
 
 // NewBit allocates new qubit from classical bit.
@@ -44,34 +47,39 @@ func NewBit(n, size int) Qubit {
 
 // ToVec copies the underlying vec and returns.
 func (q Qubit) ToVec() vec.Vec {
-	return vec.Vec(q).Copy()
+	return q.data.Copy()
 }
 
 // Copy copies q.
 func (q Qubit) Copy() Qubit {
-	return Qubit(q.ToVec())
+	return Qubit{data: q.data.Copy(), size: q.size}
 }
 
 // Size returns the bit length of a qubit.
 func (q Qubit) Size() int {
-	return numbers.BitLen(vec.Vec(q).Dim()) - 1
+	return q.size
+}
+
+// At returns ith element of a qubit.
+func (q Qubit) At(i int) complex128 {
+	return q.data[i]
 }
 
 // Dim returns the vector length of a qubit.
 func (q Qubit) Dim() int {
-	return vec.Vec(q).Dim()
+	return q.data.Dim()
 }
 
 // Equals checks if two qubits are equal.
 func (q Qubit) Equals(p Qubit) bool {
-	return vec.Vec(q).Equals(vec.Vec(p))
+	return q.data.Equals(p.data)
 }
 
 // String implements Stringer interface.
 func (q Qubit) String() string {
 	r := ""
 
-	for n, a := range q {
+	for n, a := range q.data {
 		if cmplx.Abs(a) < 1e-6 {
 			continue
 		}
