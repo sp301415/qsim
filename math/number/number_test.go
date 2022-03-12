@@ -38,7 +38,7 @@ func TestBinLen(t *testing.T) {
 
 func TestMinMax(t *testing.T) {
 	N := 100
-	data := slice.Sequence(0, N)
+	data := slice.Range(0, N)
 
 	rand.Shuffle(N, func(i, j int) { data[i], data[j] = data[j], data[i] })
 

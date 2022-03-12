@@ -8,6 +8,7 @@ import (
 
 	"github.com/sp301415/qsim/math/number"
 	"github.com/sp301415/qsim/math/vec"
+	"github.com/sp301415/qsim/utils/slice"
 )
 
 // Options for a circuit.
@@ -165,6 +166,10 @@ func (c *Circuit) Apply(op Gate, iregs ...int) {
 
 	if number.Min(iregs...) < 0 || number.Max(iregs...) > c.Size() {
 		panic("Registers out of range.")
+	}
+
+	if slice.HasDuplicate(iregs) {
+		panic("Duplicate registers.")
 	}
 
 	// Special treatment for one and two qubit gates.
@@ -375,12 +380,12 @@ func (c *Circuit) ApplyOracle(oracle func(int) int, iregs []int, oregs []int) {
 		panic("Register index out of range.")
 	}
 
-	for _, o := range oregs {
-		for _, i := range iregs {
-			if o == i {
-				panic("Duplicate register in input and control registers.")
-			}
-		}
+	if slice.HasDuplicate(iregs) || slice.HasDuplicate(oregs) {
+		panic("Duplicate registers.")
+	}
+
+	if slice.HasCommon(iregs, oregs) {
+		panic("Duplicate registers.")
 	}
 
 	if c.state.Dim() > c.Option.PARALLEL_THRESHOLD {
@@ -493,12 +498,12 @@ func (c *Circuit) Control(op Gate, cregs, iregs []int) {
 		panic("Registers out of range.")
 	}
 
-	for _, c := range cregs {
-		for _, i := range iregs {
-			if c == i {
-				panic("Duplicate register in input and control registers.")
-			}
-		}
+	if slice.HasDuplicate(cregs) || slice.HasDuplicate(iregs) {
+		panic("Duplicate registers.")
+	}
+
+	if slice.HasCommon(cregs, iregs) {
+		panic("Duplicate registers.")
 	}
 
 	// Special treatment for one and two qubit gates.
@@ -533,7 +538,7 @@ func (c *Circuit) controlOne(op Gate, cregs []int, i int) {
 		n0 := ((n >> i) << (i + 1)) + (n % lo)
 		n1 := n0 | lo
 
-		if !checkControlBit(n0, cregs) || !checkControlBit(n1, cregs) {
+		if !checkControlBit(n0, cregs) {
 			continue
 		}
 
@@ -570,7 +575,7 @@ func (c *Circuit) controlOneParallel(op Gate, cregs []int, i int) {
 				n0 := ((n >> i) << (i + 1)) + (n % lo)
 				n1 := n0 | lo
 
-				if !checkControlBit(n0, cregs) || !checkControlBit(n1, cregs) {
+				if !checkControlBit(n0, cregs) {
 					continue
 				}
 
@@ -603,7 +608,7 @@ func (c *Circuit) controlTwo(op Gate, cregs []int, i0, i1 int) {
 		n10 := n00 | lo1
 		n11 := n10 | lo0
 
-		if !checkControlBit(n00, cregs) || !checkControlBit(n01, cregs) || !checkControlBit(n10, cregs) || !checkControlBit(n11, cregs) {
+		if !checkControlBit(n00, cregs) {
 			continue
 		}
 
@@ -649,7 +654,7 @@ func (c *Circuit) controlTwoParallel(op Gate, cregs []int, i0, i1 int) {
 				n10 := n00 | lo1
 				n11 := n10 | lo0
 
-				if !checkControlBit(n00, cregs) || !checkControlBit(n01, cregs) || !checkControlBit(n10, cregs) || !checkControlBit(n11, cregs) {
+				if !checkControlBit(n00, cregs) {
 					continue
 				}
 
@@ -713,7 +718,7 @@ func (c *Circuit) Swap(i0, i1 int) {
 	}
 
 	if i0 == i1 {
-		panic("Swapping same registers.")
+		panic("Duplicate registers.")
 	}
 
 	if c.Size() == 2 {
@@ -820,6 +825,10 @@ func (c *Circuit) InvQFT(iregs ...int) {
 func (c *Circuit) Measure(iregs ...int) int {
 	if number.Min(iregs...) < 0 || number.Max(iregs...) > c.Size() {
 		panic("Register index out of range.")
+	}
+
+	if slice.HasDuplicate(iregs) {
+		panic("Duplicate registers.")
 	}
 
 	probs := make([]float64, 1<<len(iregs))

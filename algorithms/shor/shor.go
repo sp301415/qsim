@@ -41,8 +41,8 @@ func shorInstance(N int, verbose bool) int {
 	q := qsim.NewCircuit(3 * n)
 	q.SetBit((1 << n) - 1)
 
-	iregs := slice.Sequence(n, 3*n)
-	oregs := slice.Sequence(0, n)
+	iregs := slice.Range(n, 3*n)
+	oregs := slice.Range(0, n)
 
 	q.H(iregs...)
 

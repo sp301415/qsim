@@ -98,7 +98,7 @@ func TestMultiH(t *testing.T) {
 
 func TestMultiApply(t *testing.T) {
 	N := 5
-	regs := slice.Sequence(0, N)
+	regs := slice.Range(0, N)
 
 	c1 := qsim.NewCircuit(N)
 	c1.H(regs...)
@@ -250,10 +250,10 @@ func TestQFT(t *testing.T) {
 func TestInvQFT(t *testing.T) {
 	N := 10
 	c := qsim.NewCircuit(N)
-	iregs := slice.Sequence(0, N)
+	regs := slice.Range(0, N)
 
-	c.QFT(iregs...)
-	c.InvQFT(iregs...)
+	c.QFT(regs...)
+	c.InvQFT(regs...)
 
 	if !c.State().Equals(qsim.NewBit(0, N)) {
 		t.Fail()
@@ -267,7 +267,7 @@ func TestMeasure(t *testing.T) {
 	c := qsim.NewCircuit(N)
 	c.SetBit(M)
 
-	m := c.Measure(slice.Sequence(0, N)...)
+	m := c.Measure(slice.Range(0, N)...)
 
 	if m != M {
 		t.Fail()
@@ -276,7 +276,7 @@ func TestMeasure(t *testing.T) {
 
 func BenchmarkTensorApply(t *testing.B) {
 	N := 10
-	regs := slice.Sequence(0, N)
+	regs := slice.Range(0, N)
 
 	H := qsim.H()
 	X := qsim.X()
@@ -303,7 +303,7 @@ func BenchmarkApply(t *testing.B) {
 	c := qsim.NewCircuit(N)
 	c.Option.PARALLEL_THRESHOLD = 20
 
-	regs := slice.Sequence(0, N)
+	regs := slice.Range(0, N)
 
 	c.H(regs...)
 	c.X(regs...)
@@ -317,7 +317,7 @@ func BenchmarkApplyParallel(t *testing.B) {
 	c := qsim.NewCircuit(N)
 	c.Option.PARALLEL_THRESHOLD = 5
 
-	regs := slice.Sequence(0, N)
+	regs := slice.Range(0, N)
 
 	c.H(regs...)
 	c.X(regs...)
@@ -331,7 +331,7 @@ func BenchmarkApplyLarge(t *testing.B) {
 	c := qsim.NewCircuit(N)
 	c.Option.PARALLEL_THRESHOLD = 24
 
-	regs := slice.Sequence(0, N)
+	regs := slice.Range(0, N)
 
 	c.H(regs...)
 	c.X(regs...)
@@ -345,7 +345,7 @@ func BenchmarkApplyParallelLarge(t *testing.B) {
 	c := qsim.NewCircuit(N)
 	c.Option.PARALLEL_THRESHOLD = 5
 
-	regs := slice.Sequence(0, N)
+	regs := slice.Range(0, N)
 
 	c.H(regs...)
 	c.X(regs...)

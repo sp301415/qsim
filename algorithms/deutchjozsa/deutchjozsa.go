@@ -22,7 +22,7 @@ func ConstantFunc(x int) int {
 
 // Returns true if oracle is constant. false if it is not.
 func DeutchJozsa(n int, oracle func(int) int) bool {
-	iregs := slice.Sequence(0, n)
+	iregs := slice.Range(0, n)
 
 	// Prepare n + 1 registers with |0...01>.
 	q := qsim.NewCircuit(n + 1)
