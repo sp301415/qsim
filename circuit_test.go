@@ -303,18 +303,12 @@ func BenchmarkApply(t *testing.B) {
 	c := qsim.NewCircuit(N)
 	c.Option.PARALLEL_THRESHOLD = 20
 
-	for i := 0; i < N; i++ {
-		c.H(i)
-	}
-	for i := 0; i < N; i++ {
-		c.X(i)
-	}
-	for i := 0; i < N; i++ {
-		c.Z(i)
-	}
-	for i := 0; i < N; i++ {
-		c.T(i)
-	}
+	regs := slice.Sequence(0, N)
+
+	c.H(regs...)
+	c.X(regs...)
+	c.Z(regs...)
+	c.T(regs...)
 }
 
 func BenchmarkApplyParallel(t *testing.B) {
@@ -323,48 +317,38 @@ func BenchmarkApplyParallel(t *testing.B) {
 	c := qsim.NewCircuit(N)
 	c.Option.PARALLEL_THRESHOLD = 5
 
-	for i := 0; i < N; i++ {
-		c.H(i)
-	}
-	for i := 0; i < N; i++ {
-		c.X(i)
-	}
-	for i := 0; i < N; i++ {
-		c.Z(i)
-	}
-	for i := 0; i < N; i++ {
-		c.T(i)
-	}
+	regs := slice.Sequence(0, N)
+
+	c.H(regs...)
+	c.X(regs...)
+	c.Z(regs...)
+	c.T(regs...)
 }
 
-func BenchmarkGrover4(t *testing.B) {
-	q := qsim.NewCircuit(4)
+func BenchmarkApplyLarge(t *testing.B) {
+	N := 20
 
-	// superposition
-	for i := 0; i < q.Size(); i++ {
-		q.H(i)
-	}
+	c := qsim.NewCircuit(N)
+	c.Option.PARALLEL_THRESHOLD = 24
 
-	// iteration
-	N := 1 << q.Size()
-	r := math.Floor(math.Pi / 4 * math.Sqrt(float64(N)))
-	for i := 0; i < int(r); i++ {
-		q.X(0, 1)
-		q.H(0)
-		q.Control(qsim.X(), []int{1, 2, 3}, []int{0})
-		q.H(0)
-		q.X(0, 1)
+	regs := slice.Sequence(0, N)
 
-		q.H(0, 1, 2, 3)
-		q.X(0, 1, 2, 3)
-		q.H(0)
-		q.Control(qsim.X(), []int{1, 2, 3}, []int{0})
-		q.H(0)
-		q.X(0, 1, 2, 3)
-		q.H(0, 1, 2, 3)
-	}
+	c.H(regs...)
+	c.X(regs...)
+	c.Z(regs...)
+	c.T(regs...)
+}
 
-	if q.Measure(0, 1, 2, 3) != 12 {
-		t.Fail()
-	}
+func BenchmarkApplyParallelLarge(t *testing.B) {
+	N := 20
+
+	c := qsim.NewCircuit(N)
+	c.Option.PARALLEL_THRESHOLD = 5
+
+	regs := slice.Sequence(0, N)
+
+	c.H(regs...)
+	c.X(regs...)
+	c.Z(regs...)
+	c.T(regs...)
 }

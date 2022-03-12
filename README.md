@@ -5,9 +5,8 @@ QSim is a quantum computing simulator written in pure go. Currently it supports 
 NOTE: All measurements are not random for now, for benchmarking purposes. If you want real random, apply some seed to `rand`.
 
 ## Example
+### GHZ
 ```go
-// Two Qubit GHZ State.
-
 // Prepare two qubit circuit.
 c := qsim.NewCircuit(2)
 
@@ -17,27 +16,62 @@ c.CX(0, 1)
 
 fmt.Println(c)
 // Output:
-// |00>: (0.707107+0.000000i)
-// |11>: (0.707107+0.000000i)
+// [ 0]|00>: (0.707107+0.000000i)
+// [ 3]|11>: (0.707107+0.000000i)
 
 // Measure the first qubit.
 c.Measure(0)
 
 fmt.Println(c)
 // Output:
-// |11>: (1.000000+0.000000i)
+// [ 3]|11>: (1.000000+0.000000i)
 ```
 
-## Benchmark
-All tests are done in Mac mini with M1.
-```
-goos: darwin
-goarch: arm64
-pkg: github.com/sp301415/qsim
-BenchmarkTensorApply-8    	1000000000	         0.02787 ns/op	       0 B/op	       0 allocs/op
-BenchmarkApply-8           	1000000000	         0.0000753 ns/op	       0 B/op	       0 allocs/op
-BenchmarkApplyParallel-8   	1000000000	         0.0001435 ns/op	       0 B/op	       0 allocs/op
-```
-Benchmark applies bunch of gates to 10 qubit circuit. `BenchmarkTensorApply` tensor products gates first, then applies it to the circuit. `BenchmarkApply` and `BenchmarkApplyParallel` repeatedly applies one qubit gate to each qubit. We can see that QSim's `Apply` is more than 3500 times faster than the naive method. 
+### Grover
+```go 
+// Grover's Algorithm with 4 qubits.
 
-Interestingly, using parallel computation takes litte more time, possibly because of the overhead. You can change this behavior by setting `Circuit.Option.PARALLEL_THRESHOLD`. The default value is 10.
+// Prepare four qubit circuit.
+c := qsim.NewCircuit(4)
+
+// Apply Hadamard Gate.
+c.H(0, 1, 2, 3)
+
+// Iterate.
+n := 1 << c.Size()
+r := math.Floor(math.Pi / 4 * math.Sqrt(float64(n)))
+for i := 0; i < int(r); i++ {
+    c.X(0, 1)
+    c.H(0)
+    c.Control(qsim.X(), []int{1, 2, 3}, []int{0})
+    c.H(0)
+    c.X(0, 1)
+
+    c.H(0, 1, 2, 3)
+    c.X(0, 1, 2, 3)
+    c.H(0)
+    c.Control(qsim.X(), []int{1, 2, 3}, []int{0})
+    c.H(0)
+    c.X(0, 1, 2, 3)
+    c.H(0, 1, 2, 3)
+}
+
+fmt.Println(c)
+// Output:
+// [ 0] |0000>: (0.050781+0.000000i)
+// [ 1] |0001>: (0.050781+0.000000i)
+// [ 2] |0010>: (0.050781+0.000000i)
+// [ 3] |0011>: (0.050781+0.000000i)
+// [ 4] |0100>: (0.050781+0.000000i)
+// [ 5] |0101>: (0.050781+0.000000i)
+// [ 6] |0110>: (0.050781+0.000000i)
+// [ 7] |0111>: (0.050781+0.000000i)
+// [ 8] |1000>: (0.050781+0.000000i)
+// [ 9] |1001>: (0.050781+0.000000i)
+// [10] |1010>: (0.050781+0.000000i)
+// [11] |1011>: (0.050781+0.000000i)
+// [12] |1100>: (-0.980469+0.000000i)
+// [13] |1101>: (0.050781+0.000000i)
+// [14] |1110>: (0.050781+0.000000i)
+// [15] |1111>: (0.050781+0.000000i)
+```

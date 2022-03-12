@@ -83,7 +83,7 @@ func (q Qubit) String() string {
 			continue
 		}
 
-		r += fmt.Sprintf("[%3d] |%0*b>: %f\n", n, q.Size(), n, a)
+		r += fmt.Sprintf("[%2d] |%0*b>: %f\n", n, q.Size(), n, a)
 	}
 	return r
 }
