@@ -32,3 +32,12 @@ func BenchmarkShor55(t *testing.B) {
 		t.Fail()
 	}
 }
+
+func BenchmarkShor85(t *testing.B) {
+	N := 85
+	factor := shor.Shor(N)
+
+	if N%factor != 0 {
+		t.Fail()
+	}
+}

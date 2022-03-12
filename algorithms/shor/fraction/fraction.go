@@ -4,7 +4,7 @@ package fraction
 import (
 	"fmt"
 
-	"github.com/sp301415/qsim/math/numbers"
+	"github.com/sp301415/qsim/math/number"
 )
 
 // N / D
@@ -19,7 +19,7 @@ func New(N, D int) Fraction {
 		panic("Division by zero.")
 	}
 
-	g := numbers.GCD(N, D)
+	g := number.GCD(N, D)
 
 	return Fraction{N: N / g, D: D / g}
 }

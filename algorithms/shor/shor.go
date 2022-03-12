@@ -6,7 +6,8 @@ import (
 
 	"github.com/sp301415/qsim"
 	"github.com/sp301415/qsim/algorithms/shor/fraction"
-	"github.com/sp301415/qsim/math/numbers"
+	"github.com/sp301415/qsim/math/number"
+	"github.com/sp301415/qsim/utils/slice"
 )
 
 func shorInstance(N int, verbose bool) int {
@@ -14,7 +15,7 @@ func shorInstance(N int, verbose bool) int {
 	a := 0
 	for {
 		a = rand.Intn(N) + 1
-		K := numbers.GCD(a, N)
+		K := number.GCD(a, N)
 
 		if K != 1 {
 			if verbose {
@@ -30,7 +31,7 @@ func shorInstance(N int, verbose bool) int {
 		fmt.Printf("[+] Using a: %d\n", a)
 	}
 
-	n := numbers.BitLen(N)
+	n := number.BitLen(N)
 
 	if verbose {
 		fmt.Println("[*] Initializing Qubit State...")
@@ -40,32 +41,23 @@ func shorInstance(N int, verbose bool) int {
 	q := qsim.NewCircuit(3 * n)
 	q.SetBit((1 << n) - 1)
 
-	iregs := make([]int, 2*n)
-	oregs := make([]int, n)
+	iregs := slice.Sequence(n, 3*n)
+	oregs := slice.Sequence(0, n)
 
-	for i := range iregs {
-		iregs[i] = i + n
-	}
-	for i := range oregs {
-		oregs[i] = i
-	}
-
-	for _, v := range iregs {
-		q.H(v)
-	}
+	q.H(iregs...)
 
 	if verbose {
 		fmt.Println("[*] Applying Shor's Oracle...")
 	}
 
-	oracle := func(x int) int { return numbers.PowMod(a, x, N) }
+	oracle := func(x int) int { return number.PowMod(a, x, N) }
 	q.ApplyOracle(oracle, iregs, oregs)
 
 	if verbose {
 		fmt.Println("[*] Applying Inverse QFT...")
 	}
 
-	q.InvQFT(n, 3*n)
+	q.InvQFT(iregs...)
 
 	if verbose {
 		fmt.Println("[*] Measuring...")
@@ -98,7 +90,7 @@ func shorInstance(N int, verbose bool) int {
 
 	factor := 0
 	for v := -1; v <= 1; v += 2 {
-		factor = numbers.GCD(numbers.PowMod(a, r/2, N)+v, N)
+		factor = number.GCD(number.PowMod(a, r/2, N)+v, N)
 
 		if verbose {
 			fmt.Printf("[*] Checking factor: %d...\n", factor)

@@ -1,8 +1,12 @@
-// Package numbers provides various functions for integers.
-package numbers
+// Package number provides various functions for integers.
+package number
 
 // Pow returns a ** b.
 func Pow(a, b int) int {
+	if a == 2 {
+		return 1 << b
+	}
+
 	res := 1
 
 	for b > 0 {

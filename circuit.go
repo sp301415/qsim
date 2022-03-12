@@ -4,10 +4,9 @@ import (
 	"math"
 	"math/rand"
 	"runtime"
-	"sort"
 	"sync"
 
-	"github.com/sp301415/qsim/math/numbers"
+	"github.com/sp301415/qsim/math/number"
 	"github.com/sp301415/qsim/math/vec"
 )
 
@@ -32,7 +31,7 @@ func (c *Circuit) cleartemp() {
 
 // NewCircuit initializes circuit with nbits size.
 func NewCircuit(nbits int) *Circuit {
-	if nbits < 0 || nbits > 20 {
+	if nbits < 0 || nbits > 24 {
 		panic("Unsupported amount of qubits. Currently qsim supports up to 20 qubits.")
 	}
 
@@ -61,43 +60,85 @@ func (c Circuit) State() Qubit {
 // Gates.
 
 // Applies the I gate.
-func (c *Circuit) I(i int) {
+func (c *Circuit) I(iregs ...int) {
 	// Just Do Nothing. lol.
 }
 
 // Applies the X gate.
-func (c *Circuit) X(i int) {
-	c.Apply(X(), i)
+func (c *Circuit) X(iregs ...int) {
+	if len(iregs) == 0 {
+		panic("At least one input registers required.")
+	}
+
+	for _, i := range iregs {
+		c.Apply(X(), i)
+	}
 }
 
 // Applies the Y gate.
-func (c *Circuit) Y(i int) {
-	c.Apply(Y(), i)
+func (c *Circuit) Y(iregs ...int) {
+	if len(iregs) == 0 {
+		panic("At least one input registers required.")
+	}
+
+	for _, i := range iregs {
+		c.Apply(Y(), i)
+	}
 }
 
 // Applies the Z gate.
-func (c *Circuit) Z(i int) {
-	c.Apply(Z(), i)
+func (c *Circuit) Z(iregs ...int) {
+	if len(iregs) == 0 {
+		panic("At least one input registers required.")
+	}
+
+	for _, i := range iregs {
+		c.Apply(Z(), i)
+	}
 }
 
 // Applies the H gate.
-func (c *Circuit) H(i int) {
-	c.Apply(H(), i)
+func (c *Circuit) H(iregs ...int) {
+	if len(iregs) == 0 {
+		panic("At least one input registers required.")
+	}
+
+	for _, i := range iregs {
+		c.Apply(H(), i)
+	}
 }
 
 // Applies the P gate.
-func (c *Circuit) P(phi float64, i int) {
-	c.Apply(P(phi), i)
+func (c *Circuit) P(phi float64, iregs ...int) {
+	if len(iregs) == 0 {
+		panic("At least one input registers required.")
+	}
+
+	for _, i := range iregs {
+		c.Apply(P(phi), i)
+	}
 }
 
 // Applies the S gate.
-func (c *Circuit) S(i int) {
-	c.Apply(S(), i)
+func (c *Circuit) S(iregs ...int) {
+	if len(iregs) == 0 {
+		panic("At least one input registers required.")
+	}
+
+	for _, i := range iregs {
+		c.Apply(S(), i)
+	}
 }
 
 // Applies the T gate.
-func (c *Circuit) T(i int) {
-	c.Apply(T(), i)
+func (c *Circuit) T(iregs ...int) {
+	if len(iregs) == 0 {
+		panic("At least one input registers required.")
+	}
+
+	for _, i := range iregs {
+		c.Apply(T(), i)
+	}
 }
 
 // Applies the CX gate.
@@ -122,7 +163,7 @@ func (c *Circuit) Apply(op Gate, iregs ...int) {
 		panic("Operator size does not match input registers.")
 	}
 
-	if numbers.Min(iregs...) < 0 || numbers.Max(iregs...) > c.Size() {
+	if number.Min(iregs...) < 0 || number.Max(iregs...) > c.Size() {
 		panic("Registers out of range.")
 	}
 
@@ -326,12 +367,20 @@ func (c *Circuit) ApplyOracle(oracle func(int) int, iregs []int, oregs []int) {
 		panic("Invalid input/output registers.")
 	}
 
-	if numbers.Min(iregs...) < 0 || numbers.Max(iregs...) >= c.Size() {
+	if number.Min(iregs...) < 0 || number.Max(iregs...) >= c.Size() {
 		panic("Register index out of range.")
 	}
 
-	if numbers.Min(oregs...) < 0 || numbers.Max(oregs...) >= c.Size() {
+	if number.Min(oregs...) < 0 || number.Max(oregs...) >= c.Size() {
 		panic("Register index out of range.")
+	}
+
+	for _, o := range oregs {
+		for _, i := range iregs {
+			if o == i {
+				panic("Duplicate register in input and control registers.")
+			}
+		}
 	}
 
 	if c.state.Dim() > c.Option.PARALLEL_THRESHOLD {
@@ -417,13 +466,13 @@ func (c *Circuit) applyOracleParallel(oracle func(int) int, iregs, oregs []int) 
 
 // Used for calculating control bits in control-functions.
 func checkControlBit(n int, cregs []int) bool {
-	res := 0
-
 	for _, idx := range cregs {
-		res ^= (n >> idx) & 1
+		if (n>>idx)&1 == 0 {
+			return false
+		}
 	}
 
-	return res == 1
+	return true
 }
 
 // Control applies controlled gate.
@@ -436,12 +485,20 @@ func (c *Circuit) Control(op Gate, cregs, iregs []int) {
 		panic("Operator size does not match input registers.")
 	}
 
-	if numbers.Min(cregs...) < 0 || numbers.Max(cregs...) > c.Size() {
+	if number.Min(cregs...) < 0 || number.Max(cregs...) > c.Size() {
 		panic("Registers out of range.")
 	}
 
-	if numbers.Min(iregs...) < 0 || numbers.Max(iregs...) > c.Size() {
+	if number.Min(iregs...) < 0 || number.Max(iregs...) > c.Size() {
 		panic("Registers out of range.")
+	}
+
+	for _, c := range cregs {
+		for _, i := range iregs {
+			if c == i {
+				panic("Duplicate register in input and control registers.")
+			}
+		}
 	}
 
 	// Special treatment for one and two qubit gates.
@@ -720,70 +777,48 @@ func (c *Circuit) swapParallel(i0, i1 int) {
 	wg.Wait()
 }
 
-// QFT applies QFT to [start, end).
-func (c *Circuit) QFT(start, end int) {
-	if start < 0 || end > c.Size() {
-		panic("Index out of range.")
-	}
-
-	if start >= end {
-		panic("Invalid start / end parameters.")
-	}
-
-	phis := make([]float64, end-start)
-
+// QFT applies QFT.
+func (c *Circuit) QFT(iregs ...int) {
+	phis := make([]float64, len(iregs))
 	for i := range phis {
-		phis[i] = math.Pi / math.Pow(2.0, float64(i))
+		phis[i] = math.Pi / float64(number.Pow(2, i))
 	}
 
-	for i := end - 1; i >= start; i-- {
-		c.H(i)
-		for j := start; j < i; j++ {
-			c.Control(P(phis[i-j]), []int{j}, []int{i})
+	for i := len(iregs) - 1; i >= 0; i-- {
+		c.H(iregs[i])
+		for j := 0; j < i; j++ {
+			c.Control(P(phis[i-j]), []int{iregs[j]}, []int{iregs[i]})
 		}
 	}
 
-	for i, j := start, end-1; i < j; i, j = i+1, j-1 {
-		c.Swap(i, j)
+	for i, j := 0, len(iregs)-1; i < j; i, j = i+1, j-1 {
+		c.Swap(iregs[i], iregs[j])
 	}
-
 }
 
-// InvQFT applies Inverse QFT to [start, end).
-func (c *Circuit) InvQFT(start, end int) {
-	if start < 0 || end > c.Size() {
-		panic("Index out of range.")
+// InvQFT applies Inverse QFT.
+func (c *Circuit) InvQFT(iregs ...int) {
+	for i, j := 0, len(iregs)-1; i < j; i, j = i+1, j-1 {
+		c.Swap(iregs[i], iregs[j])
 	}
 
-	if start >= end {
-		panic("Invalid start / end parameters.")
-	}
-
-	for i, j := start, end-1; i < j; i, j = i+1, j-1 {
-		c.Swap(i, j)
-	}
-
-	phis := make([]float64, end-start)
+	phis := make([]float64, len(iregs))
 
 	for i := range phis {
-		phis[i] = -math.Pi / math.Pow(2.0, float64(i))
+		phis[i] = -math.Pi / float64(number.Pow(2, i))
 	}
 
-	for i := start; i < end; i++ {
-		for j := start; j < i; j++ {
-			c.Control(P(phis[i-j]), []int{j}, []int{i})
+	for i := 0; i < len(iregs); i++ {
+		for j := 0; j < i; j++ {
+			c.Control(P(phis[i-j]), []int{iregs[j]}, []int{iregs[i]})
 		}
-		c.H(i)
+		c.H(iregs[i])
 	}
 }
 
 // Measure measures qubits.
 func (c *Circuit) Measure(iregs ...int) int {
-	iregs_s := make([]int, len(iregs))
-	copy(iregs_s, iregs)
-	sort.Ints(iregs_s)
-
-	if iregs_s[0] < 0 || iregs_s[len(iregs_s)-1] > c.Size() {
+	if number.Min(iregs...) < 0 || number.Max(iregs...) > c.Size() {
 		panic("Register index out of range.")
 	}
 
@@ -794,15 +829,13 @@ func (c *Circuit) Measure(iregs ...int) int {
 			continue
 		}
 		o := 0
-		for i, q := range iregs_s {
+		for i, q := range iregs {
 			o += ((n >> q) & 1) << i
 		}
 		probs[o] += real(amp)*real(amp) + imag(amp)*imag(amp)
 	}
 
-	// Wait, Golang does not have weighted sampling? WTF.
 	rand := rand.Float64()
-
 	output := 0
 	accsum := 0.0
 
@@ -822,7 +855,7 @@ func (c *Circuit) Measure(iregs ...int) int {
 		}
 
 		has_output := true
-		for i, q := range iregs_s {
+		for i, q := range iregs {
 			if (n>>q)&1 != (output>>i)&1 {
 				c.state.data[n] = 0
 				has_output = false

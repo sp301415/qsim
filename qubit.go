@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math/cmplx"
 
-	"github.com/sp301415/qsim/math/numbers"
+	"github.com/sp301415/qsim/math/number"
 	"github.com/sp301415/qsim/math/vec"
 )
 
@@ -20,7 +20,7 @@ func NewQubit(v vec.Vec) Qubit {
 		panic("Vector size must be power of two.")
 	}
 
-	return Qubit{data: v, size: numbers.BitLen(v.Dim()) - 1}
+	return Qubit{data: v, size: number.BitLen(v.Dim()) - 1}
 }
 
 // NewBit allocates new qubit from classical bit.
@@ -31,7 +31,7 @@ func NewBit(n, size int) Qubit {
 	}
 
 	if size == 0 {
-		size = numbers.BitLen(n)
+		size = number.BitLen(n)
 	}
 
 	if n > 1<<size {
@@ -83,7 +83,7 @@ func (q Qubit) String() string {
 			continue
 		}
 
-		r += fmt.Sprintf("|%0*b>: %f\n", q.Size(), n, a)
+		r += fmt.Sprintf("[%3d] |%0*b>: %f\n", n, q.Size(), n, a)
 	}
 	return r
 }

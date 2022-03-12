@@ -5,7 +5,7 @@ import (
 	"math/cmplx"
 
 	"github.com/sp301415/qsim/math/mat"
-	"github.com/sp301415/qsim/math/numbers"
+	"github.com/sp301415/qsim/math/number"
 )
 
 type Gate struct {
@@ -23,7 +23,7 @@ func NewGate(m mat.Mat) Gate {
 		panic("Matrix size should be a power of two.")
 	}
 
-	return Gate{data: m, size: numbers.BitLen(m.NRows()) - 1}
+	return Gate{data: m, size: number.BitLen(m.NRows()) - 1}
 }
 
 // ToMat copies the underlying mat and returns.
@@ -56,6 +56,17 @@ func (g Gate) Tensor(o Gate) Gate {
 }
 
 // Famous Gates.
+
+// I returns the Identity Gate.
+func I() Gate {
+	return Gate{
+		data: [][]complex128{
+			{1, 0},
+			{0, 1},
+		},
+		size: 1,
+	}
+}
 
 // X returns the NOT Gate (X Gate).
 func X() Gate {
