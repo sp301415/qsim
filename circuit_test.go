@@ -274,6 +274,32 @@ func TestMeasure(t *testing.T) {
 	}
 }
 
+func TestParallel(t *testing.T) {
+	N := 5
+	regs := slice.Range(0, N)
+
+	Z2 := qsim.Z().Tensor(qsim.Z())
+
+	c1 := qsim.NewCircuit(N)
+	c2 := qsim.NewCircuit(N)
+	c2.Option.GOROUTINE_CNT = 7
+	c2.Option.PARALLEL_THRESHOLD = 0
+
+	c1.H(regs...)
+	c1.Apply(Z2, 0, 1)
+	c1.CCX(1, 2, 3)
+	c1.Control(Z2, []int{2}, []int{3, 4})
+
+	c2.H(regs...)
+	c2.Apply(Z2, 0, 1)
+	c2.CCX(1, 2, 3)
+	c2.Control(Z2, []int{2}, []int{3, 4})
+
+	if !c1.State().Equals(c2.State()) {
+		t.Fail()
+	}
+}
+
 func BenchmarkTensorApply(t *testing.B) {
 	N := 10
 	regs := slice.Range(0, N)

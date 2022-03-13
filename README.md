@@ -1,8 +1,8 @@
 # QSim
 
-QSim is a quantum computing simulator written in pure go. Currently it supports up to 32 qubits, offering optimizations for one and two qubit gates using dedicated functions and parallelization. Applying one qubit gate to `n`-qubit state takes around `O(2^n)`.
+QSim is a quantum computing simulator written in pure go. Currently it supports up to 24 qubits, offering optimizations for one and two qubit gates using dedicated functions and parallelization. Applying one qubit gate to `n`-qubit state takes around `O(2^n)`.
 
-NOTE: All measurements are not random for now, for benchmarking purposes. If you want real random, apply some seed to `rand`.
+NOTE: All measurements are not random for now, for benchmarking purposes.
 
 ## Example
 ### GHZ
