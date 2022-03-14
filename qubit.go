@@ -77,13 +77,14 @@ func (q Qubit) Equals(p Qubit) bool {
 // String implements Stringer interface.
 func (q Qubit) String() string {
 	r := ""
+	idxpad := number.BitLen(q.Size())
 
 	for n, a := range q.data {
 		if cmplx.Abs(a) < 1e-6 {
 			continue
 		}
 
-		r += fmt.Sprintf("[%2d] |%0*b>: %f\n", n, q.Size(), n, a)
+		r += fmt.Sprintf("[%*d] |%0*b>: %f\n", idxpad, n, q.Size(), n, a)
 	}
 	return r
 }
