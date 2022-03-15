@@ -341,7 +341,7 @@ func BenchmarkApplyParallel(t *testing.B) {
 	N := 10
 
 	c := qsim.NewCircuit(N)
-	c.Option.PARALLEL_THRESHOLD = 5
+	c.Option.PARALLEL_THRESHOLD = 0
 
 	regs := slice.Range(0, N)
 

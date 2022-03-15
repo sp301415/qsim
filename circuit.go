@@ -198,12 +198,12 @@ func (c *Circuit) Apply(op Gate, iregs ...int) {
 
 // applyOne applies one qubit gate.
 func (c *Circuit) applyOne(op Gate, i int) {
-	lo := 1 << i
+	mask := (1 << i) - 1
 
 	for n := 0; n < c.state.Dim()/2; n++ {
 		// n0 = XXX0XXX, n1 = XXX1XXX
-		n0 := ((n >> i) << (i + 1)) + (n % lo)
-		n1 := n0 | lo
+		n0 := ((n & ^mask) << 1) + (n & mask)
+		n1 := n0 | (mask + 1)
 
 		a0 := c.state.data[n0]
 		a1 := c.state.data[n1]
@@ -224,18 +224,18 @@ func (c *Circuit) applyOneParallel(op Gate, i int) {
 	}
 	chunkidx[c.Option.GOROUTINE_CNT] = jobsize
 
-	wg := &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	wg.Add(c.Option.GOROUTINE_CNT)
 
-	lo := 1 << i
+	mask := (1 << i) - 1
 
 	for n := 0; n < c.Option.GOROUTINE_CNT; n++ {
 		go func(start, end int) {
 			defer wg.Done()
 
 			for n := start; n < end; n++ {
-				n0 := ((n >> i) << (i + 1)) + (n % lo)
-				n1 := n0 | lo
+				n0 := ((n & ^mask) << 1) + (n & mask)
+				n1 := n0 | (mask + 1)
 
 				a0 := c.state.data[n0]
 				a1 := c.state.data[n1]
@@ -255,20 +255,25 @@ func (c *Circuit) applyTwo(op Gate, i0, i1 int) {
 		panic("Cannot apply gate to same registers.")
 	}
 
-	lo0 := 1 << i0
-	lo1 := 1 << i1
+	if i0 > i1 {
+		i0, i1 = i1, i0
+		op.data[1], op.data[2] = op.data[2], op.data[1]
+	}
+
+	mask0 := (1 << i0) - 1
+	mask1 := (1 << i1) - 1
 
 	for n := 0; n < c.state.Dim()/4; n++ {
 		// n00 = XXX0(i1)XXX0(i0)XXX
 		// n01 = XXX0(i1)XXX1(i0)XXX
 		// ...
 
-		n0 := ((n >> i0) << (i0 + 1)) + (n % lo0)
+		t := ((n & ^mask0) << 1) + (n & mask0)
 
-		n00 := ((n0 >> i1) << (i1 + 1)) + (n % lo1)
-		n01 := n00 | lo0
-		n10 := n00 | lo1
-		n11 := n10 | lo0
+		n00 := ((t & ^mask1) << 1) + (t & mask1)
+		n01 := n00 | (mask0 + 1)
+		n10 := n00 | (mask1 + 1)
+		n11 := n10 | (mask0 + 1)
 
 		a00 := c.state.data[n00]
 		a01 := c.state.data[n01]
@@ -293,23 +298,28 @@ func (c *Circuit) applyTwoParallel(op Gate, i0, i1 int) {
 	}
 	chunkidx[c.Option.GOROUTINE_CNT] = jobsize
 
-	wg := &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	wg.Add(c.Option.GOROUTINE_CNT)
 
-	lo0 := 1 << i0
-	lo1 := 1 << i1
+	if i0 > i1 {
+		i0, i1 = i1, i0
+		op.data[1], op.data[2] = op.data[2], op.data[1]
+	}
+
+	mask0 := (1 << i0) - 1
+	mask1 := (1 << i1) - 1
 
 	for n := 0; n < c.Option.GOROUTINE_CNT; n++ {
 		go func(start, end int) {
 			defer wg.Done()
 
 			for n := start; n < end; n++ {
-				n0 := ((n >> i0) << (i0 + 1)) + (n % lo0)
+				t := ((n & ^mask0) << 1) + (n & mask0)
 
-				n00 := ((n0 >> i1) << (i1 + 1)) + (n % lo1)
-				n01 := n00 | lo0
-				n10 := n00 | lo1
-				n11 := n10 | lo0
+				n00 := ((t & ^mask1) << 1) + (t & mask1)
+				n01 := n00 | (mask0 + 1)
+				n10 := n00 | (mask1 + 1)
+				n11 := n10 | (mask0 + 1)
 
 				a00 := c.state.data[n00]
 				a01 := c.state.data[n01]
@@ -329,6 +339,7 @@ func (c *Circuit) applyTwoParallel(op Gate, i0, i1 int) {
 
 // applyGeneral applies gate to this circuit.
 func (c *Circuit) applyGeneral(op Gate, iregs ...int) {
+	c.cleartemp()
 	for basis, amp := range c.state.data {
 		if amp == 0 {
 			continue
@@ -360,7 +371,6 @@ func (c *Circuit) applyGeneral(op Gate, iregs ...int) {
 	}
 
 	c.state, c.temp = c.temp, c.state
-	c.cleartemp()
 }
 
 // ApplyOracle applies the oracle f to circuit. Maps |x>_{iregs}|y>_{oregs} -> |x>_{iregs}|y^f(x)>_{oregs}.
@@ -391,6 +401,7 @@ func (c *Circuit) ApplyOracle(oracle func(int) int, iregs []int, oregs []int) {
 		return
 	}
 
+	c.cleartemp()
 	for basis, amp := range c.state.data {
 		if amp == 0 {
 			continue
@@ -405,19 +416,19 @@ func (c *Circuit) ApplyOracle(oracle func(int) int, iregs []int, oregs []int) {
 
 		newbasis := basis
 		for idx, val := range oregs {
-			bit := (output >> idx) & 1
-			newbasis ^= bit << val
+			newbasis ^= ((output >> idx) & 1) << val
 		}
 
 		c.temp.data[newbasis] = amp
 	}
 
 	c.state, c.temp = c.temp, c.state
-	c.cleartemp()
 }
 
-// applyOracleGeneral applies oracle as ApplyOracle with no parallelization.
+// applyOracleParallel applies oracle with parallelizaiton.
 func (c *Circuit) applyOracleParallel(oracle func(int) int, iregs, oregs []int) {
+	c.cleartemp()
+
 	jobsize := c.state.Dim()
 	chunksize := jobsize / c.Option.GOROUTINE_CNT
 
@@ -427,7 +438,7 @@ func (c *Circuit) applyOracleParallel(oracle func(int) int, iregs, oregs []int) 
 	}
 	chunkidx[c.Option.GOROUTINE_CNT] = jobsize
 
-	wg := &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	wg.Add(c.Option.GOROUTINE_CNT)
 
 	for n := 0; n < c.Option.GOROUTINE_CNT; n++ {
@@ -449,8 +460,7 @@ func (c *Circuit) applyOracleParallel(oracle func(int) int, iregs, oregs []int) 
 
 				newbasis := basis
 				for idx, val := range oregs {
-					bit := (output >> idx) & 1
-					newbasis ^= bit << val
+					newbasis ^= ((output >> idx) & 1) << val
 				}
 
 				c.temp.data[newbasis] = amp
@@ -461,7 +471,6 @@ func (c *Circuit) applyOracleParallel(oracle func(int) int, iregs, oregs []int) 
 	wg.Wait()
 
 	c.state, c.temp = c.temp, c.state
-	c.cleartemp()
 }
 
 // Control.
@@ -529,11 +538,11 @@ func (c *Circuit) Control(op Gate, cregs, iregs []int) {
 
 // controlOne applies one qubit controlled gate.
 func (c *Circuit) controlOne(op Gate, cregs []int, i int) {
-	lo := 1 << i
+	mask := (1 << i) - 1
 
 	for n := 0; n < c.state.Dim()/2; n++ {
-		n0 := ((n >> i) << (i + 1)) + (n % lo)
-		n1 := n0 | lo
+		n0 := ((n & ^mask) << 1) + (n & mask)
+		n1 := n0 | (mask + 1)
 
 		if !checkControlBit(n0, cregs) {
 			continue
@@ -558,18 +567,18 @@ func (c *Circuit) controlOneParallel(op Gate, cregs []int, i int) {
 	}
 	chunkidx[c.Option.GOROUTINE_CNT] = jobsize
 
-	wg := &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	wg.Add(c.Option.GOROUTINE_CNT)
 
-	lo := 1 << i
+	mask := (1 << i) - 1
 
 	for n := 0; n < c.Option.GOROUTINE_CNT; n++ {
 		go func(start, end int) {
 			defer wg.Done()
 
 			for n := start; n < end; n++ {
-				n0 := ((n >> i) << (i + 1)) + (n % lo)
-				n1 := n0 | lo
+				n0 := ((n & ^mask) << 1) + (n & mask)
+				n1 := n0 | (mask + 1)
 
 				if !checkControlBit(n0, cregs) {
 					continue
@@ -593,16 +602,21 @@ func (c *Circuit) controlTwo(op Gate, cregs []int, i0, i1 int) {
 		panic("Cannot apply gate to same registers.")
 	}
 
-	lo0 := 1 << i0
-	lo1 := 1 << i1
+	if i0 > i1 {
+		i0, i1 = i1, i0
+		op.data[1], op.data[2] = op.data[2], op.data[1]
+	}
+
+	mask0 := (1 << i0) - 1
+	mask1 := (1 << i1) - 1
 
 	for n := 0; n < c.state.Dim()/4; n++ {
-		n0 := ((n >> i0) << (i0 + 1)) + (n % lo0)
+		t := ((n & ^mask0) << 1) + (n & mask0)
 
-		n00 := ((n0 >> i1) << (i1 + 1)) + (n % lo1)
-		n01 := n00 | lo0
-		n10 := n00 | lo1
-		n11 := n10 | lo0
+		n00 := ((t & ^mask1) << 1) + (t & mask1)
+		n01 := n00 | (mask0 + 1)
+		n10 := n00 | (mask1 + 1)
+		n11 := n10 | (mask0 + 1)
 
 		if !checkControlBit(n00, cregs) {
 			continue
@@ -631,23 +645,28 @@ func (c *Circuit) controlTwoParallel(op Gate, cregs []int, i0, i1 int) {
 	}
 	chunkidx[c.Option.GOROUTINE_CNT] = jobsize
 
-	wg := &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	wg.Add(c.Option.GOROUTINE_CNT)
 
-	lo0 := 1 << i0
-	lo1 := 1 << i1
+	if i0 > i1 {
+		i0, i1 = i1, i0
+		op.data[1], op.data[2] = op.data[2], op.data[1]
+	}
+
+	mask0 := (1 << i0) - 1
+	mask1 := (1 << i1) - 1
 
 	for n := 0; n < c.Option.GOROUTINE_CNT; n++ {
 		go func(start, end int) {
 			defer wg.Done()
 
 			for n := start; n < end; n++ {
-				n0 := ((n >> i0) << (i0 + 1)) + (n % lo0)
+				t := ((n & ^mask0) << 1) + (n & mask0)
 
-				n00 := ((n0 >> i1) << (i1 + 1)) + (n % lo1)
-				n01 := n00 | lo0
-				n10 := n00 | lo1
-				n11 := n10 | lo0
+				n00 := ((t & ^mask1) << 1) + (t & mask1)
+				n01 := n00 | (mask0 + 1)
+				n10 := n00 | (mask1 + 1)
+				n11 := n10 | (mask0 + 1)
 
 				if !checkControlBit(n00, cregs) {
 					continue
@@ -671,6 +690,7 @@ func (c *Circuit) controlTwoParallel(op Gate, cregs []int, i0, i1 int) {
 
 // controlGeneral applies controlled gate to this circuit.
 func (c *Circuit) controlGeneral(op Gate, cregs, iregs []int) {
+	c.cleartemp()
 	for basis, amp := range c.state.data {
 		if amp == 0 {
 			continue
@@ -693,15 +713,13 @@ func (c *Circuit) controlGeneral(op Gate, cregs, iregs []int) {
 
 			newbasis := basis
 			for idx, val := range iregs {
-				bit := (newibasis >> idx) & 1
-				newbasis = (newbasis | (1 << val)) - ((bit ^ 1) << val)
+				newbasis = (newbasis | (1 << val)) - ((((newibasis >> idx) & 1) ^ 1) << val)
 			}
 			c.temp.data[newbasis] += amp * newamp
 		}
 	}
 
 	c.state, c.temp = c.temp, c.state
-	c.cleartemp()
 }
 
 // Misc Gates.
@@ -726,15 +744,19 @@ func (c *Circuit) Swap(i0, i1 int) {
 		return
 	}
 
-	lo0 := 1 << i0
-	lo1 := 1 << i1
+	if i0 > i1 {
+		i0, i1 = i1, i0
+	}
+
+	mask0 := (1 << i0) - 1
+	mask1 := (1 << i1) - 1
 
 	for n := 0; n < c.state.Dim()/4; n++ {
-		n0 := ((n >> i0) << (i0 + 1)) + (n % lo0)
-		n00 := ((n0 >> i1) << (i1 + 1)) + (n % lo1)
+		t := ((n & ^mask0) << 1) + (n & mask0)
 
-		n01 := n00 | lo0
-		n10 := n00 | lo1
+		n00 := ((t & ^mask1) << 1) + (t & mask1)
+		n01 := n00 | (mask0 + 1)
+		n10 := n00 | (mask1 + 1)
 
 		c.state.data[n01], c.state.data[n10] = c.state.data[n10], c.state.data[n01]
 	}
@@ -751,22 +773,26 @@ func (c *Circuit) swapParallel(i0, i1 int) {
 	}
 	chunkidx[c.Option.GOROUTINE_CNT] = jobsize
 
-	wg := &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	wg.Add(c.Option.GOROUTINE_CNT)
 
-	lo0 := 1 << i0
-	lo1 := 1 << i1
+	if i0 > i1 {
+		i0, i1 = i1, i0
+	}
+
+	mask0 := (1 << i0) - 1
+	mask1 := (1 << i1) - 1
 
 	for n := 0; n < c.Option.GOROUTINE_CNT; n++ {
 		go func(start, end int) {
 			defer wg.Done()
 
 			for n := start; n < end; n++ {
-				n0 := ((n >> i0) << (i0 + 1)) + (n % lo0)
-				n00 := ((n0 >> i1) << (i1 + 1)) + (n % lo1)
+				t := ((n & ^mask0) << 1) + (n & mask0)
 
-				n01 := n00 | lo0
-				n10 := n00 | lo1
+				n00 := ((t & ^mask1) << 1) + (t & mask1)
+				n01 := n00 | (mask0 + 1)
+				n10 := n00 | (mask1 + 1)
 
 				c.state.data[n01], c.state.data[n10] = c.state.data[n10], c.state.data[n01]
 			}
