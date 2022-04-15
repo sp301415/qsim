@@ -260,8 +260,9 @@ func (m Mat) Mul(n Mat) Mat {
 	r := NewMat(m.NRows(), n.NCols())
 	for i := 0; i < m.NRows(); i++ {
 		for j := 0; j < n.NCols(); j++ {
+			x := m[j][i]
 			for k := 0; k < m.NCols(); k++ {
-				r[i][j] += m[i][k] * n[k][j]
+				r[j][k] += x * n[i][k]
 			}
 		}
 	}
