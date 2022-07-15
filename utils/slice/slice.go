@@ -13,7 +13,7 @@ func Range(a, b int) []int {
 }
 
 // Contains returns if slice contains element.
-func Contains(s []int, a int) bool {
+func Contains[T comparable](s []T, a T) bool {
 	for _, v := range s {
 		if v == a {
 			return true
@@ -24,7 +24,7 @@ func Contains(s []int, a int) bool {
 }
 
 // HasCommon returns if two array has common element.
-func HasCommon(s1, s2 []int) bool {
+func HasCommon[T comparable](s1, s2 []T) bool {
 	for _, v := range s1 {
 		if Contains(s2, v) {
 			return true
@@ -35,14 +35,14 @@ func HasCommon(s1, s2 []int) bool {
 }
 
 // HasDuplicate returns if given slice contains duplicate elements.
-func HasDuplicate(s []int) bool {
-	m := make(map[int]bool)
+func HasDuplicate[T comparable](s []T) bool {
+	m := make(map[T]struct{})
 
 	for _, v := range s {
 		if _, e := m[v]; e {
 			return true
 		}
-		m[v] = true
+		m[v] = struct{}{}
 	}
 
 	return false

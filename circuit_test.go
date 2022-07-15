@@ -300,81 +300,87 @@ func TestParallel(t *testing.T) {
 	}
 }
 
-func BenchmarkTensorApply(t *testing.B) {
+func BenchmarkTensorApply(b *testing.B) {
 	N := 10
 	regs := slice.Range(0, N)
 
-	H := qsim.H()
-	X := qsim.X()
-	Z := qsim.Z()
-	T := qsim.T()
+	for i := 0; i < b.N; i++ {
+		H := qsim.H()
+		X := qsim.X()
+		Z := qsim.Z()
+		T := qsim.T()
 
-	c := qsim.NewCircuit(N)
-	for i := 1; i < N; i++ {
-		H = H.Tensor(qsim.H())
-		X = X.Tensor(qsim.X())
-		Z = Z.Tensor(qsim.Z())
-		T = T.Tensor(qsim.T())
+		c := qsim.NewCircuit(N)
+		for i := 1; i < N; i++ {
+			H = H.Tensor(qsim.H())
+			X = X.Tensor(qsim.X())
+			Z = Z.Tensor(qsim.Z())
+			T = T.Tensor(qsim.T())
+		}
+
+		c.Apply(H, regs...)
+		c.Apply(X, regs...)
+		c.Apply(Z, regs...)
+		c.Apply(T, regs...)
 	}
-
-	c.Apply(H, regs...)
-	c.Apply(X, regs...)
-	c.Apply(Z, regs...)
-	c.Apply(T, regs...)
 }
 
-func BenchmarkApply(t *testing.B) {
+func BenchmarkApply(b *testing.B) {
 	N := 10
-
-	c := qsim.NewCircuit(N)
-	c.Option.PARALLEL_THRESHOLD = 20
-
 	regs := slice.Range(0, N)
 
-	c.H(regs...)
-	c.X(regs...)
-	c.Z(regs...)
-	c.T(regs...)
+	for i := 0; i < b.N; i++ {
+		c := qsim.NewCircuit(N)
+		c.Option.PARALLEL_THRESHOLD = 20
+
+		c.H(regs...)
+		c.X(regs...)
+		c.Z(regs...)
+		c.T(regs...)
+	}
 }
 
-func BenchmarkApplyParallel(t *testing.B) {
+func BenchmarkApplyParallel(b *testing.B) {
 	N := 10
-
-	c := qsim.NewCircuit(N)
-	c.Option.PARALLEL_THRESHOLD = 0
-
 	regs := slice.Range(0, N)
 
-	c.H(regs...)
-	c.X(regs...)
-	c.Z(regs...)
-	c.T(regs...)
+	for i := 0; i < b.N; i++ {
+		c := qsim.NewCircuit(N)
+		c.Option.PARALLEL_THRESHOLD = 0
+
+		c.H(regs...)
+		c.X(regs...)
+		c.Z(regs...)
+		c.T(regs...)
+	}
 }
 
-func BenchmarkApplyLarge(t *testing.B) {
+func BenchmarkApplyLarge(b *testing.B) {
 	N := 20
-
-	c := qsim.NewCircuit(N)
-	c.Option.PARALLEL_THRESHOLD = 24
-
 	regs := slice.Range(0, N)
 
-	c.H(regs...)
-	c.X(regs...)
-	c.Z(regs...)
-	c.T(regs...)
+	for i := 0; i < b.N; i++ {
+		c := qsim.NewCircuit(N)
+		c.Option.PARALLEL_THRESHOLD = 24
+
+		c.H(regs...)
+		c.X(regs...)
+		c.Z(regs...)
+		c.T(regs...)
+	}
 }
 
-func BenchmarkApplyParallelLarge(t *testing.B) {
+func BenchmarkApplyParallelLarge(b *testing.B) {
 	N := 20
-
-	c := qsim.NewCircuit(N)
-	c.Option.PARALLEL_THRESHOLD = 5
-
 	regs := slice.Range(0, N)
 
-	c.H(regs...)
-	c.X(regs...)
-	c.Z(regs...)
-	c.T(regs...)
+	for i := 0; i < b.N; i++ {
+		c := qsim.NewCircuit(N)
+		c.Option.PARALLEL_THRESHOLD = 5
+
+		c.H(regs...)
+		c.X(regs...)
+		c.Z(regs...)
+		c.T(regs...)
+	}
 }
